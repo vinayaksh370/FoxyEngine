@@ -11,6 +11,7 @@
 #include <string>   // For text strings
 #include <vector>   // For lists/arrays
 #include <iostream> // For printing messages
+#include <algorithm> // for std::clamp
 
 namespace Foxy
 {
@@ -85,6 +86,22 @@ namespace Foxy
         VkSurfaceKHR m_Surface = VK_NULL_HANDLE; // The surface we render/present into
 
         void createSurface(); // Create the window surface
+
+        // --------------------------------------------
+        // Swap Chain
+        // --------------------------------------------
+        VkSwapchainKHR m_SwapChain = VK_NULL_HANDLE;
+        std::vector<VkImage> m_SwapChainImages; // The actual images we render into
+        VkSurfaceFormatKHR m_SwapChainSurfaceFormat{};
+        VkExtent2D m_SwapChainExtent{};
+
+        void createSwapChain();
+
+        // Swap chain helper functions
+        static uint32_t chooseSwapMinImageCount(const VkSurfaceCapabilitiesKHR& capabilities);
+        static VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
+        static VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
+        VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities); // not static, needs m_Window    
 
         // --------------------------------------------
         // Debug/Validation - Like having a teacher check our work

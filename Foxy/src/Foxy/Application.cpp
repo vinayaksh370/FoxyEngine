@@ -63,6 +63,7 @@ namespace Foxy
         createSurface();
         pickPhysicalDevice();
         createLogicalDevice();
+        createSwapChain(); 
     }
 
     void Application::mainLoop()
@@ -75,6 +76,7 @@ namespace Foxy
 
     void Application::cleanup()
     {
+        vkDestroySwapchainKHR(m_Device, m_SwapChain, nullptr);
         vkDestroyDevice(m_Device, nullptr);
         vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr); 
 
@@ -394,6 +396,108 @@ namespace Foxy
         {
             throw std::runtime_error("failed to create window surface!");
         }
+    }
+
+     // SwapChain Setup //
+     void Application::createSwapChain()
+    {
+        VkSurfaceCapabilitiesKHR surfaceCapabilities{};
+        vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_PhysicalDevice, m_Surface, &surfaceCapabilities);
+
+        m_SwapChainExtent = chooseSwapExtent(surfaceCapabilities);
+        uint32_t minImageCount = chooseSwapMinImageCount(surfaceCapabilities);
+
+        uint32_t formatCount = 0;
+        vkGetPhysicalDeviceSurfaceFormatsKHR(m_PhysicalDevice, m_Surface, &formatCount, nullptr);
+        std::vector<VkSurfaceFormatKHR> availableFormats(formatCount);
+        vkGetPhysicalDeviceSurfaceFormatsKHR(m_PhysicalDevice, m_Surface, &formatCount, availableFormats.data());
+        m_SwapChainSurfaceFormat = chooseSwapSurfaceFormat(availableFormats);
+
+        uint32_t presentModeCount = 0;
+        vkGetPhysicalDeviceSurfacePresentModesKHR(m_PhysicalDevice, m_Surface, &presentModeCount, nullptr);
+        std::vector<VkPresentModeKHR> availablePresentModes(presentModeCount);
+        vkGetPhysicalDeviceSurfacePresentModesKHR(m_PhysicalDevice, m_Surface, &presentModeCount,
+                                                  availablePresentModes.data());
+        VkPresentModeKHR presentMode = chooseSwapPresentMode(availablePresentModes);
+
+        VkSwapchainCreateInfoKHR swapChainCreateInfo{};
+        swapChainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+        swapChainCreateInfo.surface = m_Surface;
+        swapChainCreateInfo.minImageCount = minImageCount;
+        swapChainCreateInfo.imageFormat = m_SwapChainSurfaceFormat.format;
+        swapChainCreateInfo.imageColorSpace = m_SwapChainSurfaceFormat.colorSpace;
+        swapChainCreateInfo.imageExtent = m_SwapChainExtent;
+        swapChainCreateInfo.imageArrayLayers = 1;
+        swapChainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+        swapChainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        swapChainCreateInfo.preTransform = surfaceCapabilities.currentTransform;
+        swapChainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+        swapChainCreateInfo.presentMode = presentMode;
+        swapChainCreateInfo.clipped = VK_TRUE;
+
+        if (vkCreateSwapchainKHR(m_Device, &swapChainCreateInfo, nullptr, &m_SwapChain) != VK_SUCCESS)
+        {
+            throw std::runtime_error("failed to create swap chain!");
+        }
+
+        uint32_t imageCount = 0;
+        vkGetSwapchainImagesKHR(m_Device, m_SwapChain, &imageCount, nullptr);
+        m_SwapChainImages.resize(imageCount);
+        vkGetSwapchainImagesKHR(m_Device, m_SwapChain, &imageCount, m_SwapChainImages.data());
+    }
+
+    uint32_t Application::chooseSwapMinImageCount(const VkSurfaceCapabilitiesKHR& capabilities)
+    {
+        uint32_t minImageCount = std::max(3u, capabilities.minImageCount);
+        if (capabilities.maxImageCount > 0 && capabilities.maxImageCount < minImageCount)
+        {
+            minImageCount = capabilities.maxImageCount;
+        }
+        return minImageCount;
+    }
+
+    VkSurfaceFormatKHR Application::chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats)
+    {
+        for (const auto& format : availableFormats)
+        {
+            if (format.format == VK_FORMAT_B8G8R8A8_SRGB && format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+            {
+                return format;
+            }
+        }
+        return availableFormats[0];
+    }
+
+    VkPresentModeKHR Application::chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes)
+    {
+        for (const auto& mode : availablePresentModes)
+        {
+            if (mode == VK_PRESENT_MODE_MAILBOX_KHR)
+            {
+                return mode;
+            }
+        }
+        return VK_PRESENT_MODE_FIFO_KHR; // guaranteed to be available by the Vulkan spec
+    }
+
+    VkExtent2D Application::chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities)
+    {
+        if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max())
+        {
+            return capabilities.currentExtent;
+        }
+
+        int width, height;
+        glfwGetFramebufferSize(m_Window, &width, &height);
+
+        VkExtent2D actualExtent = {static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
+
+        actualExtent.width =
+            std::clamp(actualExtent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
+        actualExtent.height =
+            std::clamp(actualExtent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
+
+        return actualExtent;
     }
 } // namespace Foxy
 

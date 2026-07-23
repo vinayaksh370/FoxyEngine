@@ -80,6 +80,13 @@ namespace Foxy
         void createLogicalDevice(); // Create the logical device + get its queue
 
         // --------------------------------------------
+        // Window Surface
+        // --------------------------------------------
+        VkSurfaceKHR m_Surface = VK_NULL_HANDLE; // The surface we render/present into
+
+        void createSurface(); // Create the window surface
+
+        // --------------------------------------------
         // Debug/Validation - Like having a teacher check our work
         // --------------------------------------------
 

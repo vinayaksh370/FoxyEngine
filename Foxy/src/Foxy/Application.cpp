@@ -60,8 +60,9 @@ namespace Foxy
     {
         createInstance();
         setupDebugMessenger();
+        createSurface();
         pickPhysicalDevice();
-        createLogicalDevice(); 
+        createLogicalDevice();
     }
 
     void Application::mainLoop()
@@ -74,7 +75,8 @@ namespace Foxy
 
     void Application::cleanup()
     {
-        vkDestroyDevice(m_Device, nullptr); // <-- add this, FIRST
+        vkDestroyDevice(m_Device, nullptr);
+        vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr); 
 
         if (kEnableValidationLayers)
         {
@@ -317,6 +319,7 @@ namespace Foxy
         // Tutorial uses std::ranges::find_if + assert(); we translate to a
         // plain indexed loop since we're avoiding <algorithm>/<ranges> here,
         // matching the style of isDeviceSuitable()'s queue-family loop.
+
         uint32_t queueFamilyCount = 0;
         vkGetPhysicalDeviceQueueFamilyProperties(m_PhysicalDevice, &queueFamilyCount, nullptr);
         std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
@@ -324,7 +327,10 @@ namespace Foxy
 
         for (uint32_t i = 0; i < queueFamilyCount; i++)
         {
-            if (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
+            VkBool32 presentSupport = VK_FALSE;
+            vkGetPhysicalDeviceSurfaceSupportKHR(m_PhysicalDevice, i, m_Surface, &presentSupport);
+
+            if ((queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) && presentSupport)
             {
                 m_GraphicsQueueFamily = static_cast<int>(i);
                 break;
@@ -333,7 +339,7 @@ namespace Foxy
 
         if (m_GraphicsQueueFamily == -1)
         {
-            throw std::runtime_error("No graphics queue family found!");
+            throw std::runtime_error("No queue family found that supports both graphics and present!");
         }
 
         // Re-request the same Vulkan 1.1 / 1.3 / extended-dynamic-state feature
@@ -379,6 +385,15 @@ namespace Foxy
         }
 
         vkGetDeviceQueue(m_Device, static_cast<uint32_t>(m_GraphicsQueueFamily), 0, &m_GraphicsQueue);
+    }
+
+    // Window Surface //
+     void Application::createSurface()
+    {
+        if (glfwCreateWindowSurface(m_Instance, m_Window, nullptr, &m_Surface) != VK_SUCCESS)
+        {
+            throw std::runtime_error("failed to create window surface!");
+        }
     }
 } // namespace Foxy
 

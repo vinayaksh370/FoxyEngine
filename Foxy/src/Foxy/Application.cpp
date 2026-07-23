@@ -61,6 +61,7 @@ namespace Foxy
         createInstance();
         setupDebugMessenger();
         pickPhysicalDevice();
+        createLogicalDevice(); 
     }
 
     void Application::mainLoop()
@@ -73,6 +74,8 @@ namespace Foxy
 
     void Application::cleanup()
     {
+        vkDestroyDevice(m_Device, nullptr); // <-- add this, FIRST
+
         if (kEnableValidationLayers)
         {
             DestroyDebugUtilsMessengerEXT(m_Instance, m_DebugMessenger, nullptr);
@@ -305,6 +308,77 @@ namespace Foxy
                                         extendedDynamicStateFeatures.extendedDynamicState;
 
         return supportsVulkan1_3 && supportsGraphics && supportsAllRequiredExtensions && supportsRequiredFeatures;
+    }
+
+    // Create Logical Device //
+    void Application::createLogicalDevice()
+    {
+        // Find the first queue family that supports graphics.
+        // Tutorial uses std::ranges::find_if + assert(); we translate to a
+        // plain indexed loop since we're avoiding <algorithm>/<ranges> here,
+        // matching the style of isDeviceSuitable()'s queue-family loop.
+        uint32_t queueFamilyCount = 0;
+        vkGetPhysicalDeviceQueueFamilyProperties(m_PhysicalDevice, &queueFamilyCount, nullptr);
+        std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+        vkGetPhysicalDeviceQueueFamilyProperties(m_PhysicalDevice, &queueFamilyCount, queueFamilies.data());
+
+        for (uint32_t i = 0; i < queueFamilyCount; i++)
+        {
+            if (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
+            {
+                m_GraphicsQueueFamily = static_cast<int>(i);
+                break;
+            }
+        }
+
+        if (m_GraphicsQueueFamily == -1)
+        {
+            throw std::runtime_error("No graphics queue family found!");
+        }
+
+        // Re-request the same Vulkan 1.1 / 1.3 / extended-dynamic-state feature
+        // chain used in isDeviceSuitable() — but this time we SET the fields to
+        // VK_TRUE to actually turn the features on, instead of just reading them
+        // to check support.
+        VkPhysicalDeviceExtendedDynamicStateFeaturesEXT extendedDynamicStateFeatures{};
+        extendedDynamicStateFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT;
+        extendedDynamicStateFeatures.extendedDynamicState = VK_TRUE;
+
+        VkPhysicalDeviceVulkan13Features vulkan13Features{};
+        vulkan13Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+        vulkan13Features.pNext = &extendedDynamicStateFeatures;
+        vulkan13Features.dynamicRendering = VK_TRUE;
+
+        VkPhysicalDeviceVulkan11Features vulkan11Features{};
+        vulkan11Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+        vulkan11Features.pNext = &vulkan13Features;
+        vulkan11Features.shaderDrawParameters = VK_TRUE;
+
+        VkPhysicalDeviceFeatures2 deviceFeatures2{};
+        deviceFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+        deviceFeatures2.pNext = &vulkan11Features;
+
+        float queuePriority = 0.5f;
+        VkDeviceQueueCreateInfo deviceQueueCreateInfo{};
+        deviceQueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        deviceQueueCreateInfo.queueFamilyIndex = static_cast<uint32_t>(m_GraphicsQueueFamily);
+        deviceQueueCreateInfo.queueCount = 1;
+        deviceQueueCreateInfo.pQueuePriorities = &queuePriority;
+
+        VkDeviceCreateInfo deviceCreateInfo{};
+        deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+        deviceCreateInfo.pNext = &deviceFeatures2; // feature chain goes in via pNext
+        deviceCreateInfo.queueCreateInfoCount = 1;
+        deviceCreateInfo.pQueueCreateInfos = &deviceQueueCreateInfo;
+        deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(kRequiredDeviceExtensions.size());
+        deviceCreateInfo.ppEnabledExtensionNames = kRequiredDeviceExtensions.data();
+
+        if (vkCreateDevice(m_PhysicalDevice, &deviceCreateInfo, nullptr, &m_Device) != VK_SUCCESS)
+        {
+            throw std::runtime_error("failed to create logical device!");
+        }
+
+        vkGetDeviceQueue(m_Device, static_cast<uint32_t>(m_GraphicsQueueFamily), 0, &m_GraphicsQueue);
     }
 } // namespace Foxy
 

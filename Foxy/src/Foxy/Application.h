@@ -66,6 +66,20 @@ namespace Foxy
         };
 
         // --------------------------------------------
+        // Logical Device and Queues
+        // --------------------------------------------
+        VkDevice m_Device = VK_NULL_HANDLE;       // Our "connection" to the chosen GPU
+        VkQueue m_GraphicsQueue = VK_NULL_HANDLE; // Where we submit graphics commands
+
+        // Deliberate deviation from the tutorial: the tutorial uses a throwaway
+        // local `graphicsIndex` inside createLogicalDevice() and discards it.
+        // We keep it as a persistent member because NVRHI's DeviceDesc later
+        // needs the actual queue family index (int), not just the VkQueue handle.
+        int m_GraphicsQueueFamily = -1;
+
+        void createLogicalDevice(); // Create the logical device + get its queue
+
+        // --------------------------------------------
         // Debug/Validation - Like having a teacher check our work
         // --------------------------------------------
 

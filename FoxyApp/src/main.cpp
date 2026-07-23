@@ -11,12 +11,11 @@ int main()
     {
         Foxy::Application app;
         app.Run();
-        
-//#ifdef _DEBUG
-//        deviceParams.enableDebugRuntime = true;
-//        deviceParams.enableNvrhiValidationLayer = true;
-//#endif
 
+        // #ifdef _DEBUG
+        //         deviceParams.enableDebugRuntime = true;
+        //         deviceParams.enableNvrhiValidationLayer = true;
+        // #endif
     }
     catch (const std::exception& e)
     {

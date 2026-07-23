@@ -7,11 +7,12 @@
 #include <GLFW/glfw3.h>
 #include <vulkan/vulkan.h>
 
-#include <cstdint>  // For exact number types
-#include <string>   // For text strings
-#include <vector>   // For lists/arrays
-#include <iostream> // For printing messages
-#include <algorithm> // for std::clamp
+#include <cstdint>   // For exact number types
+#include <string>    // For text strings
+#include <vector>    // For lists/arrays
+#include <iostream>  // For printing messages
+#include <algorithm> // For std::clamp
+#include <fstream>   // For r/w files
 
 namespace Foxy
 {
@@ -101,7 +102,7 @@ namespace Foxy
         static uint32_t chooseSwapMinImageCount(const VkSurfaceCapabilitiesKHR& capabilities);
         static VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
         static VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
-        VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities); // not static, needs m_Window    
+        VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities); // not static, needs m_Window
 
         // --------------------------------------------
         // Image Views
@@ -109,6 +110,16 @@ namespace Foxy
         std::vector<VkImageView> m_SwapChainImageViews;
 
         void createImageViews();
+
+        // --------------------------------------------
+        // Graphics Pipeline
+        // --------------------------------------------
+        void createGraphicsPipeline(); // Build the programmable shader stages for the pipeline
+
+        VkShaderModule
+        createShaderModule(const std::vector<char>& code) const; // Wrap SPIR-V bytecode in a shader module
+        static std::vector<char>
+        readFile(const std::string& filename); // Load a binary file (e.g. compiled shader) into memory
 
         // --------------------------------------------
         // Debug/Validation - Like having a teacher check our work
@@ -128,15 +139,13 @@ namespace Foxy
         }
 
         // List of (validation layers) we want to use
-        const std::vector<char const*> kValidationLayers = {
-            "VK_LAYER_KHRONOS_validation" 
-        };
+        const std::vector<char const*> kValidationLayers = {"VK_LAYER_KHRONOS_validation"};
 
 // Turn on Validation Layers only when DEBUG mode
 #ifdef NDEBUG
         static constexpr bool kEnableValidationLayers = false;
 #else
-        static constexpr bool kEnableValidationLayers = true; 
+        static constexpr bool kEnableValidationLayers = true;
 #endif
     };
 

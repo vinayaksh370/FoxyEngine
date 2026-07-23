@@ -63,8 +63,9 @@ namespace Foxy
         createSurface();
         pickPhysicalDevice();
         createLogicalDevice();
-        createSwapChain(); 
+        createSwapChain();
         createImageViews();
+        createGraphicsPipeline();
     }
 
     void Application::mainLoop()
@@ -77,14 +78,14 @@ namespace Foxy
 
     void Application::cleanup()
     {
-        for (auto imageView : m_SwapChainImageViews) 
+        for (auto imageView : m_SwapChainImageViews)
         {
             vkDestroyImageView(m_Device, imageView, nullptr);
         }
 
         vkDestroySwapchainKHR(m_Device, m_SwapChain, nullptr);
         vkDestroyDevice(m_Device, nullptr);
-        vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr); 
+        vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);
 
         if (kEnableValidationLayers)
         {
@@ -396,7 +397,7 @@ namespace Foxy
     }
 
     // Window Surface //
-     void Application::createSurface()
+    void Application::createSurface()
     {
         if (glfwCreateWindowSurface(m_Instance, m_Window, nullptr, &m_Surface) != VK_SUCCESS)
         {
@@ -404,8 +405,8 @@ namespace Foxy
         }
     }
 
-     // SwapChain Setup //
-     void Application::createSwapChain()
+    // SwapChain Setup //
+    void Application::createSwapChain()
     {
         VkSurfaceCapabilitiesKHR surfaceCapabilities{};
         vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_PhysicalDevice, m_Surface, &surfaceCapabilities);
@@ -530,9 +531,67 @@ namespace Foxy
             }
         }
     }
+
+    // Create Graphics Pipeline //
+    void Application::createGraphicsPipeline()
+    {
+        std::vector<char> shaderCode = readFile("shaders/basic_triangle.spv");
+        VkShaderModule shaderModule = 0;
+        shaderModule = createShaderModule(shaderCode);
+
+        VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
+        vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+        vertShaderStageInfo.module = shaderModule;
+        vertShaderStageInfo.pName = "vertMain";
+
+        VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
+        fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+        fragShaderStageInfo.module = shaderModule;
+        fragShaderStageInfo.pName = "fragMain";
+
+        VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
+
+        // NOTE: shaderStages[] isn't consumed by anything yet - that happens once
+        // VkGraphicsPipelineCreateInfo + vkCreateGraphicsPipelines() show up in a
+        // future chapter (Fixed Functions, then Conclusion). At that point,
+        // shaderModule should be destroyed with vkDestroyShaderModule(m_Device,
+        // shaderModule, nullptr) right after pipeline creation - it's only needed
+        // during that call, not at runtime. Deliberately left un-destroyed here
+        // for now since this function isn't finished; flagging so this doesn't
+        // look like a forgotten cleanup call later.
+    }
+
+    VkShaderModule Application::createShaderModule(const std::vector<char>& code) const
+    {
+        VkShaderModuleCreateInfo createInfo{};
+        createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+        createInfo.codeSize = code.size();
+        createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
+
+        VkShaderModule shaderModule;
+        if (vkCreateShaderModule(m_Device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS)
+        {
+            throw std::runtime_error("failed to create shader module!");
+        }
+
+        return shaderModule;
+    }
+
+    std::vector<char> Application::readFile(const std::string& filename)
+    {
+        std::ifstream file(filename, std::ios::ate | std::ios::binary);
+        if (!file.is_open())
+        {
+            throw std::runtime_error("failed to open file: " + filename);
+        }
+
+        std::vector<char> buffer(static_cast<size_t>(file.tellg()));
+        file.seekg(0);
+        file.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+        file.close();
+
+        return buffer;
+    }
 } // namespace Foxy
-
-
-
-
-

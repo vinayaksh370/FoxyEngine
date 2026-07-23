@@ -104,6 +104,13 @@ namespace Foxy
         VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities); // not static, needs m_Window    
 
         // --------------------------------------------
+        // Image Views
+        // --------------------------------------------
+        std::vector<VkImageView> m_SwapChainImageViews;
+
+        void createImageViews();
+
+        // --------------------------------------------
         // Debug/Validation - Like having a teacher check our work
         // --------------------------------------------
 

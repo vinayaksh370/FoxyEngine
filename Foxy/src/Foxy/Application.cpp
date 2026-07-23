@@ -64,6 +64,7 @@ namespace Foxy
         pickPhysicalDevice();
         createLogicalDevice();
         createSwapChain(); 
+        createImageViews();
     }
 
     void Application::mainLoop()
@@ -76,6 +77,11 @@ namespace Foxy
 
     void Application::cleanup()
     {
+        for (auto imageView : m_SwapChainImageViews) 
+        {
+            vkDestroyImageView(m_Device, imageView, nullptr);
+        }
+
         vkDestroySwapchainKHR(m_Device, m_SwapChain, nullptr);
         vkDestroyDevice(m_Device, nullptr);
         vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr); 
@@ -498,6 +504,31 @@ namespace Foxy
             std::clamp(actualExtent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
 
         return actualExtent;
+    }
+
+    // Create Image Views //
+    void Application::createImageViews()
+    {
+        m_SwapChainImageViews.resize(m_SwapChainImages.size());
+
+        for (size_t i = 0; i < m_SwapChainImages.size(); i++)
+        {
+            VkImageViewCreateInfo imageViewCreateInfo{};
+            imageViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            imageViewCreateInfo.image = m_SwapChainImages[i];
+            imageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+            imageViewCreateInfo.format = m_SwapChainSurfaceFormat.format;
+            imageViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            imageViewCreateInfo.subresourceRange.baseMipLevel = 0;
+            imageViewCreateInfo.subresourceRange.levelCount = 1;
+            imageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
+            imageViewCreateInfo.subresourceRange.layerCount = 1;
+
+            if (vkCreateImageView(m_Device, &imageViewCreateInfo, nullptr, &m_SwapChainImageViews[i]) != VK_SUCCESS)
+            {
+                throw std::runtime_error("failed to create image views!");
+            }
+        }
     }
 } // namespace Foxy
 

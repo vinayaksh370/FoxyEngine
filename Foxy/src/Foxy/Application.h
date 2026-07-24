@@ -121,6 +121,26 @@ namespace Foxy
         static std::vector<char>
         readFile(const std::string& filename); // Load a binary file (e.g. compiled shader) into memory
 
+        VkPipelineLayout m_PipelineLayout = VK_NULL_HANDLE; // Describes uniform/push-constant layout for the pipeline (empty for now)
+
+        VkPipeline m_GraphicsPipeline = VK_NULL_HANDLE; // The actual baked pipeline object
+
+        // --------------------------------------------
+        // Command Pool / Command Buffer
+        // --------------------------------------------
+        VkCommandPool m_CommandPool = VK_NULL_HANDLE;
+        VkCommandBuffer m_CommandBuffer =
+            VK_NULL_HANDLE; // Command buffers are freed automatically when their pool is destroyed
+
+        void createCommandPool();
+        void createCommandBuffer();
+        void recordCommandBuffer(uint32_t imageIndex);
+
+        // Transitions a swap chain image between layouts (e.g. undefined -> color attachment -> present)
+        void transitionImageLayout(uint32_t imageIndex, VkImageLayout oldLayout, VkImageLayout newLayout,
+                                   VkAccessFlags2 srcAccessMask, VkAccessFlags2 dstAccessMask,
+                                   VkPipelineStageFlags2 srcStageMask, VkPipelineStageFlags2 dstStageMask);
+
         // --------------------------------------------
         // Debug/Validation - Like having a teacher check our work
         // --------------------------------------------

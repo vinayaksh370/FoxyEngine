@@ -32,12 +32,12 @@ set_target_properties(FoxyApp PROPERTIES
 
 function(add_slang_shaders)
     file(GLOB SHADER_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/*.slang")
+    set(SHADER_SOURCES ${SHADER_SOURCES} PARENT_SCOPE) # expose the list so source_group can use it outside this function
     set(SHADER_OUT_DIR "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders")
 
     foreach(SHADER_SRC_PATH ${SHADER_SOURCES})
         get_filename_component(SHADER_NAME ${SHADER_SRC_PATH} NAME_WE)
         set(SHADER_OUT_PATH "${SHADER_OUT_DIR}/${SHADER_NAME}.spv")
-
         file(READ ${SHADER_SRC_PATH} SHADER_CONTENTS)
         set(ENTRY_POINT_ARGS "")
         foreach(ENTRY vertMain fragMain compMain)
@@ -46,18 +46,14 @@ function(add_slang_shaders)
                 list(APPEND ENTRY_POINT_ARGS -entry ${ENTRY})
             endif()
         endforeach()
-
         if (NOT ENTRY_POINT_ARGS)
             message(FATAL_ERROR "No recognized entry points (vertMain/fragMain/compMain) found in ${SHADER_SRC_PATH}")
         endif()
-
         target_sources(FoxyApp PRIVATE ${SHADER_SRC_PATH})
-
         set_source_files_properties(${SHADER_SRC_PATH} PROPERTIES
             VS_TOOL_OVERRIDE "None"
             HEADER_FILE_ONLY TRUE
         )
-
         add_custom_command(
             OUTPUT ${SHADER_OUT_PATH}
             COMMAND ${CMAKE_COMMAND} -E make_directory ${SHADER_OUT_DIR}
@@ -76,3 +72,5 @@ function(add_slang_shaders)
 endfunction()
 
 add_slang_shaders()
+
+source_group("shaders" FILES ${SHADER_SOURCES})

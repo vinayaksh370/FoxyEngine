@@ -49,11 +49,13 @@ namespace Foxy
     {
         glfwInit();
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-        glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+        glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);    // Simple Resizable or not
 
-        // m_Window = glfwCreateWindow(kWindowWidth, kWindowHeight, kWindowName.data(), nullptr, nullptr);
         m_Window = glfwCreateWindow(ApplicationSpecification::Width, ApplicationSpecification::Height,
                                     ApplicationSpecification::Name.c_str(), nullptr, nullptr);
+
+        glfwSetWindowUserPointer(m_Window, this);
+        glfwSetFramebufferSizeCallback(m_Window, framebufferResizeCallback);
     }
 
     void Application::initVulkan()
@@ -100,14 +102,10 @@ namespace Foxy
         vkDestroyPipeline(m_Device, m_GraphicsPipeline, nullptr);
         vkDestroyPipelineLayout(m_Device, m_PipelineLayout, nullptr);
 
-        for (auto imageView : m_SwapChainImageViews)
-        {
-            vkDestroyImageView(m_Device, imageView, nullptr);
-        }
+        cleanupSwapChain();
 
-        vkDestroySwapchainKHR(m_Device, m_SwapChain, nullptr);
         vkDestroyDevice(m_Device, nullptr);
-        vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);
+        vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr); 
 
         if (kEnableValidationLayers)
         {
@@ -901,11 +899,23 @@ namespace Foxy
         {
             throw std::runtime_error("failed to wait for fence!");
         }
-        vkResetFences(m_Device, 1, &m_InFlightFences[m_FrameIndex]);
 
         uint32_t imageIndex = 0;
-        vkAcquireNextImageKHR(m_Device, m_SwapChain, UINT64_MAX, m_PresentCompleteSemaphores[m_FrameIndex],
-                              VK_NULL_HANDLE, &imageIndex);
+        VkResult acquireResult = vkAcquireNextImageKHR(
+            m_Device, m_SwapChain, UINT64_MAX, m_PresentCompleteSemaphores[m_FrameIndex], VK_NULL_HANDLE, &imageIndex);
+
+        if (acquireResult == VK_ERROR_OUT_OF_DATE_KHR)
+        {
+            recreateSwapChain();
+            return;
+        }
+        if (acquireResult != VK_SUCCESS && acquireResult != VK_SUBOPTIMAL_KHR)
+        {
+            throw std::runtime_error("failed to acquire swap chain image!");
+        }
+
+        // Only reset the fence if we're actually submitting work this frame
+        vkResetFences(m_Device, 1, &m_InFlightFences[m_FrameIndex]);
 
         vkResetCommandBuffer(m_CommandBuffers[m_FrameIndex], 0);
         recordCommandBuffer(imageIndex);
@@ -935,20 +945,57 @@ namespace Foxy
         presentInfo.pSwapchains = &m_SwapChain;
         presentInfo.pImageIndices = &imageIndex;
 
-        VkResult result = vkQueuePresentKHR(m_GraphicsQueue, &presentInfo);
-        switch (result)
+        VkResult presentResult = vkQueuePresentKHR(m_GraphicsQueue, &presentInfo);
+
+        if (presentResult == VK_SUBOPTIMAL_KHR || presentResult == VK_ERROR_OUT_OF_DATE_KHR || m_FramebufferResized)
         {
-        case VK_SUCCESS:
-            break;
-        case VK_SUBOPTIMAL_KHR:
-            std::cout << "vkQueuePresentKHR returned VK_SUBOPTIMAL_KHR!" << std::endl;
-            break;
-        default:
-            break; // an unexpected result is returned!
+            m_FramebufferResized = false;
+            recreateSwapChain();
+        }
+        else if (presentResult != VK_SUCCESS)
+        {
+            throw std::runtime_error("failed to present swap chain image!");
         }
 
         m_FrameIndex = (m_FrameIndex + 1) % kMaxFramesInFlight;
     }
 
+    // Called from GLFW whenever the framebuffer size changes (e.g. window resize)
+    void Application::framebufferResizeCallback(GLFWwindow* window, int width, int height)
+    {
+        auto app = reinterpret_cast<Application*>(glfwGetWindowUserPointer(window));
+        app->m_FramebufferResized = true;
+    }
 
+    // Destroy everything tied to the current swap chain, without touching the surface/device.
+    // Called both when tearing down for a resize and during final cleanup().
+    void Application::cleanupSwapChain()
+    {
+        for (auto imageView : m_SwapChainImageViews)
+        {
+            vkDestroyImageView(m_Device, imageView, nullptr);
+        }
+        m_SwapChainImageViews.clear();
+
+        vkDestroySwapchainKHR(m_Device, m_SwapChain, nullptr);
+        m_SwapChain = VK_NULL_HANDLE;
+    }
+
+    // Rebuild the swap chain + image views (e.g. after a resize or VK_ERROR_OUT_OF_DATE_KHR)
+    void Application::recreateSwapChain()
+    {
+        int width = 0, height = 0;
+        glfwGetFramebufferSize(m_Window, &width, &height);
+        while (width == 0 || height == 0) // window is minimized - wait until it isn't
+        {
+            glfwGetFramebufferSize(m_Window, &width, &height);
+            glfwWaitEvents();
+        }
+
+        vkDeviceWaitIdle(m_Device); // don't touch resources the GPU might still be using
+
+        cleanupSwapChain();
+        createSwapChain();
+        createImageViews();
+    }
 } // namespace Foxy

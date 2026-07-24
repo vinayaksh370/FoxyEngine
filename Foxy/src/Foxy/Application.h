@@ -40,6 +40,9 @@ namespace Foxy
         // Window Settings
         // --------------------------------------------
         GLFWwindow* m_Window = nullptr; // The actual window we draw on
+        bool m_FramebufferResized = false; // Set by GLFW's resize callback, checked in drawFrame()
+
+        static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
 
         // --------------------------------------------
         // Vulkan Connection
@@ -97,6 +100,8 @@ namespace Foxy
         VkExtent2D m_SwapChainExtent{};
 
         void createSwapChain();
+        void cleanupSwapChain();  // Destroys image views + swapchain (not the surface/device)
+        void recreateSwapChain(); // Waits for a valid size, then rebuilds the swapchain + image views
 
         // Swap chain helper functions
         static uint32_t chooseSwapMinImageCount(const VkSurfaceCapabilitiesKHR& capabilities);

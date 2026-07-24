@@ -67,7 +67,8 @@ namespace Foxy
         createImageViews();
         createGraphicsPipeline();
         createCommandPool();
-        createCommandBuffer();
+        createCommandBuffers();
+        createSyncObjects();
     }
 
     void Application::mainLoop()
@@ -75,11 +76,26 @@ namespace Foxy
         while (!glfwWindowShouldClose(m_Window))
         {
             glfwPollEvents();
+            drawFrame();
         }
+        vkDeviceWaitIdle(m_Device); // wait for the GPU to finish before we start destroying resources
     }
 
     void Application::cleanup()
     {
+        for (auto semaphore : m_RenderFinishedSemaphores)
+        {
+            vkDestroySemaphore(m_Device, semaphore, nullptr);
+        }
+        for (auto semaphore : m_PresentCompleteSemaphores)
+        {
+            vkDestroySemaphore(m_Device, semaphore, nullptr);
+        }
+        for (auto fence : m_InFlightFences)
+        {
+            vkDestroyFence(m_Device, fence, nullptr);
+        }
+
         vkDestroyCommandPool(m_Device, m_CommandPool, nullptr);
         vkDestroyPipeline(m_Device, m_GraphicsPipeline, nullptr);
         vkDestroyPipelineLayout(m_Device, m_PipelineLayout, nullptr);
@@ -725,17 +741,20 @@ namespace Foxy
         }
     }
 
-    void Application::createCommandBuffer()
+    // Create Command Buffers //
+    void Application::createCommandBuffers()
     {
+        m_CommandBuffers.resize(kMaxFramesInFlight);
+
         VkCommandBufferAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
         allocInfo.commandPool = m_CommandPool;
         allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        allocInfo.commandBufferCount = 1;
+        allocInfo.commandBufferCount = static_cast<uint32_t>(m_CommandBuffers.size());
 
-        if (vkAllocateCommandBuffers(m_Device, &allocInfo, &m_CommandBuffer) != VK_SUCCESS)
+        if (vkAllocateCommandBuffers(m_Device, &allocInfo, m_CommandBuffers.data()) != VK_SUCCESS)
         {
-            throw std::runtime_error("failed to allocate command buffer!");
+            throw std::runtime_error("failed to allocate command buffers!");
         }
     }
 
@@ -765,15 +784,18 @@ namespace Foxy
         dependencyInfo.imageMemoryBarrierCount = 1;
         dependencyInfo.pImageMemoryBarriers = &barrier;
 
-        vkCmdPipelineBarrier2(m_CommandBuffer, &dependencyInfo);
+        vkCmdPipelineBarrier2(m_CommandBuffers[m_FrameIndex], &dependencyInfo);
     }
 
+    // Record Command Buffer
     void Application::recordCommandBuffer(uint32_t imageIndex)
     {
+        VkCommandBuffer commandBuffer = m_CommandBuffers[m_FrameIndex];
+
         VkCommandBufferBeginInfo beginInfo{};
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
-        if (vkBeginCommandBuffer(m_CommandBuffer, &beginInfo) != VK_SUCCESS)
+        if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS)
         {
             throw std::runtime_error("failed to begin recording command buffer!");
         }
@@ -805,9 +827,9 @@ namespace Foxy
         renderingInfo.colorAttachmentCount = 1;
         renderingInfo.pColorAttachments = &attachmentInfo;
 
-        vkCmdBeginRendering(m_CommandBuffer, &renderingInfo);
+        vkCmdBeginRendering(commandBuffer, &renderingInfo);
 
-        vkCmdBindPipeline(m_CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_GraphicsPipeline);
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_GraphicsPipeline);
 
         VkViewport viewport{};
         viewport.x = 0.0f;
@@ -816,25 +838,117 @@ namespace Foxy
         viewport.height = static_cast<float>(m_SwapChainExtent.height);
         viewport.minDepth = 0.0f;
         viewport.maxDepth = 1.0f;
-        vkCmdSetViewport(m_CommandBuffer, 0, 1, &viewport);
+        vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
 
         VkRect2D scissor{};
         scissor.offset = {0, 0};
         scissor.extent = m_SwapChainExtent;
-        vkCmdSetScissor(m_CommandBuffer, 0, 1, &scissor);
+        vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-        vkCmdDraw(m_CommandBuffer, 3, 1, 0, 0);
+        vkCmdDraw(commandBuffer, 3, 1, 0, 0);
 
-        vkCmdEndRendering(m_CommandBuffer);
+        vkCmdEndRendering(commandBuffer);
 
         // Transition swap chain image: color attachment optimal -> present src
         transitionImageLayout(imageIndex, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
                               VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, 0,
                               VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT);
 
-        if (vkEndCommandBuffer(m_CommandBuffer) != VK_SUCCESS)
+        if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS)
         {
             throw std::runtime_error("failed to record command buffer!");
         }
     }
+
+    // Create Sync Objects //
+    void Application::createSyncObjects()
+    {
+        m_RenderFinishedSemaphores.resize(m_SwapChainImages.size());
+        m_PresentCompleteSemaphores.resize(kMaxFramesInFlight);
+        m_InFlightFences.resize(kMaxFramesInFlight);
+
+        VkSemaphoreCreateInfo semaphoreInfo{};
+        semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+        VkFenceCreateInfo fenceInfo{};
+        fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT; // start signaled so the first frame doesn't wait forever
+
+        for (auto& semaphore : m_RenderFinishedSemaphores)
+        {
+            if (vkCreateSemaphore(m_Device, &semaphoreInfo, nullptr, &semaphore) != VK_SUCCESS)
+            {
+                throw std::runtime_error("failed to create render-finished semaphore!");
+            }
+        }
+
+        for (int i = 0; i < kMaxFramesInFlight; i++)
+        {
+            if (vkCreateSemaphore(m_Device, &semaphoreInfo, nullptr, &m_PresentCompleteSemaphores[i]) != VK_SUCCESS ||
+                vkCreateFence(m_Device, &fenceInfo, nullptr, &m_InFlightFences[i]) != VK_SUCCESS)
+            {
+                throw std::runtime_error("failed to create synchronization objects for a frame!");
+            }
+        }
+    }
+
+    // Draw Frame //
+    void Application::drawFrame()
+    {
+        // m_InFlightFences, m_PresentCompleteSemaphores, and m_CommandBuffers are indexed by m_FrameIndex,
+        // while m_RenderFinishedSemaphores is indexed by imageIndex.
+        if (vkWaitForFences(m_Device, 1, &m_InFlightFences[m_FrameIndex], VK_TRUE, UINT64_MAX) != VK_SUCCESS)
+        {
+            throw std::runtime_error("failed to wait for fence!");
+        }
+        vkResetFences(m_Device, 1, &m_InFlightFences[m_FrameIndex]);
+
+        uint32_t imageIndex = 0;
+        vkAcquireNextImageKHR(m_Device, m_SwapChain, UINT64_MAX, m_PresentCompleteSemaphores[m_FrameIndex],
+                              VK_NULL_HANDLE, &imageIndex);
+
+        vkResetCommandBuffer(m_CommandBuffers[m_FrameIndex], 0);
+        recordCommandBuffer(imageIndex);
+
+        VkPipelineStageFlags waitDestinationStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+        VkSubmitInfo submitInfo{};
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submitInfo.waitSemaphoreCount = 1;
+        submitInfo.pWaitSemaphores = &m_PresentCompleteSemaphores[m_FrameIndex];
+        submitInfo.pWaitDstStageMask = &waitDestinationStageMask;
+        submitInfo.commandBufferCount = 1;
+        submitInfo.pCommandBuffers = &m_CommandBuffers[m_FrameIndex];
+        submitInfo.signalSemaphoreCount = 1;
+        submitInfo.pSignalSemaphores = &m_RenderFinishedSemaphores[imageIndex];
+
+        if (vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, m_InFlightFences[m_FrameIndex]) != VK_SUCCESS)
+        {
+            throw std::runtime_error("failed to submit draw command buffer!");
+        }
+
+        VkPresentInfoKHR presentInfo{};
+        presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+        presentInfo.waitSemaphoreCount = 1;
+        presentInfo.pWaitSemaphores = &m_RenderFinishedSemaphores[imageIndex];
+        presentInfo.swapchainCount = 1;
+        presentInfo.pSwapchains = &m_SwapChain;
+        presentInfo.pImageIndices = &imageIndex;
+
+        VkResult result = vkQueuePresentKHR(m_GraphicsQueue, &presentInfo);
+        switch (result)
+        {
+        case VK_SUCCESS:
+            break;
+        case VK_SUBOPTIMAL_KHR:
+            std::cout << "vkQueuePresentKHR returned VK_SUBOPTIMAL_KHR!" << std::endl;
+            break;
+        default:
+            break; // an unexpected result is returned!
+        }
+
+        m_FrameIndex = (m_FrameIndex + 1) % kMaxFramesInFlight;
+    }
+
+
 } // namespace Foxy

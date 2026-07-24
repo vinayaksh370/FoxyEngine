@@ -121,25 +121,41 @@ namespace Foxy
         static std::vector<char>
         readFile(const std::string& filename); // Load a binary file (e.g. compiled shader) into memory
 
-        VkPipelineLayout m_PipelineLayout = VK_NULL_HANDLE; // Describes uniform/push-constant layout for the pipeline (empty for now)
+        VkPipelineLayout m_PipelineLayout =
+            VK_NULL_HANDLE; // Describes uniform/push-constant layout for the pipeline (empty for now)
 
         VkPipeline m_GraphicsPipeline = VK_NULL_HANDLE; // The actual baked pipeline object
 
         // --------------------------------------------
         // Command Pool / Command Buffer
         // --------------------------------------------
+        static constexpr int kMaxFramesInFlight = 2;
+
         VkCommandPool m_CommandPool = VK_NULL_HANDLE;
-        VkCommandBuffer m_CommandBuffer =
-            VK_NULL_HANDLE; // Command buffers are freed automatically when their pool is destroyed
+        std::vector<VkCommandBuffer> m_CommandBuffers; // One per frame-in-flight; freed automatically when the pool is destroyed
 
         void createCommandPool();
-        void createCommandBuffer();
+        void createCommandBuffers();
         void recordCommandBuffer(uint32_t imageIndex);
 
         // Transitions a swap chain image between layouts (e.g. undefined -> color attachment -> present)
         void transitionImageLayout(uint32_t imageIndex, VkImageLayout oldLayout, VkImageLayout newLayout,
                                    VkAccessFlags2 srcAccessMask, VkAccessFlags2 dstAccessMask,
                                    VkPipelineStageFlags2 srcStageMask, VkPipelineStageFlags2 dstStageMask);
+
+        // --------------------------------------------
+        // Synchronization
+        // --------------------------------------------
+        // m_PresentCompleteSemaphores and m_InFlightFences are indexed by m_FrameIndex (one per frame-in-flight).
+        // m_RenderFinishedSemaphores is indexed by imageIndex (one per swapchain image) - a frame-in-flight isn't
+        // guaranteed to always land on the same swapchain image, so this needs its own per-image semaphore.
+        std::vector<VkSemaphore> m_PresentCompleteSemaphores; // Signaled when a swapchain image is ready to render into
+        std::vector<VkSemaphore> m_RenderFinishedSemaphores;  // Signaled when rendering is done, safe to present
+        std::vector<VkFence> m_InFlightFences; // Signaled when the GPU is done with a given frame-in-flight's work
+        uint32_t m_FrameIndex = 0;             // Cycles 0..kMaxFramesInFlight-1 every drawFrame() call
+
+        void createSyncObjects();
+        void drawFrame();
 
         // --------------------------------------------
         // Debug/Validation - Like having a teacher check our work

@@ -6,6 +6,21 @@
 
 namespace
 {
+    // NVRHI wants a message callback object to report its own internal
+    // errors/warnings through, separate from the Vulkan validation layer.
+    class NvrhiMessageCallback : public nvrhi::IMessageCallback
+    {
+    public:
+        void message(nvrhi::MessageSeverity severity, const char* messageText) override
+        {
+            std::cerr << "NVRHI: " << messageText << std::endl;
+        }
+    };
+
+    NvrhiMessageCallback s_NvrhiMessageCallback;
+
+    //// 
+
     VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,
                                           const VkAllocationCallbacks* pAllocator,
                                           VkDebugUtilsMessengerEXT* pDebugMessenger)
@@ -49,6 +64,7 @@ namespace Foxy
     {
         glfwInit();
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+        //glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);    // Simple Resizable or not
         glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);    // Simple Resizable or not
 
         m_Window = glfwCreateWindow(ApplicationSpecification::Width, ApplicationSpecification::Height,
@@ -65,6 +81,9 @@ namespace Foxy
         createSurface();
         pickPhysicalDevice();
         createLogicalDevice();
+        ////
+        //createNvrhiDeviceExperiment(); // isolated experiment, see Section 5 of context file
+        ////
         createSwapChain();
         createImageViews();
         createGraphicsPipeline();
@@ -85,6 +104,9 @@ namespace Foxy
 
     void Application::cleanup()
     {
+        //m_NvrhiDevice = nullptr; // release the NVRHI device wrapper (and validation layer, if active) before tearing
+                                 // down the raw VkDevice it wraps
+
         for (auto semaphore : m_RenderFinishedSemaphores)
         {
             vkDestroySemaphore(m_Device, semaphore, nullptr);
@@ -118,6 +140,38 @@ namespace Foxy
         glfwTerminate();
     }
 
+    // Create an nvrhi::IDevice wrapper around our existing raw Vulkan device,
+    // then optionally wrap that in NVRHI's own validation layer (Debug only,
+    // mirroring kEnableValidationLayers). Purely experimental at this stage —
+    // nothing in Foxy uses m_NvrhiDevice for rendering yet.
+    //void Application::createNvrhiDeviceExperiment()
+    //{
+    //    nvrhi::vulkan::DeviceDesc deviceDesc{};
+    //    deviceDesc.errorCB = &s_NvrhiMessageCallback;
+    //    deviceDesc.physicalDevice = m_PhysicalDevice;
+    //    deviceDesc.device = m_Device;
+    //    deviceDesc.graphicsQueue = m_GraphicsQueue;
+    //    deviceDesc.graphicsQueueIndex = m_GraphicsQueueFamily;
+    //    deviceDesc.deviceExtensions = const_cast<char**>(kRequiredDeviceExtensions.data());
+    //    deviceDesc.numDeviceExtensions = kRequiredDeviceExtensions.size();
+
+    //    m_NvrhiDevice = nvrhi::vulkan::createDevice(deviceDesc);
+
+    //    if (!m_NvrhiDevice)
+    //    {
+    //        std::cout << "[NVRHI experiment] Device wrapper creation FAILED." << std::endl;
+    //        return;
+    //    }
+
+    //    std::cout << "[NVRHI experiment] Device wrapper created successfully." << std::endl;
+
+    //    if (kEnableValidationLayers)
+    //    {
+    //        nvrhi::DeviceHandle validationLayer = nvrhi::validation::createValidationLayer(m_NvrhiDevice);
+    //        m_NvrhiDevice = validationLayer; // route everything through the validation layer from here on
+    //        std::cout << "[NVRHI experiment] Validation layer active." << std::endl;
+    //    }
+    //}
     // CREATE INSTANCE:
     void Application::createInstance()
     {
@@ -336,12 +390,161 @@ namespace Foxy
         vkGetPhysicalDeviceFeatures2(device, &deviceFeatures2);
 
         bool supportsRequiredFeatures = vulkan11Features.shaderDrawParameters && vulkan13Features.dynamicRendering &&
+                                        vulkan13Features.synchronization2 &&
                                         extendedDynamicStateFeatures.extendedDynamicState;
 
         return supportsVulkan1_3 && supportsGraphics && supportsAllRequiredExtensions && supportsRequiredFeatures;
     }
 
     // Create Logical Device //
+    void Application::createLogicalDevice()
+    {
+        // Find the first queue family that supports graphics.
+        // Tutorial uses std::ranges::find_if + assert(); we translate to a
+        // plain indexed loop since we're avoiding <algorithm>/<ranges> here,
+        // matching the style of isDeviceSuitable()'s queue-family loop.
+
+        uint32_t queueFamilyCount = 0;
+        vkGetPhysicalDeviceQueueFamilyProperties(m_PhysicalDevice, &queueFamilyCount, nullptr);
+        std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+        vkGetPhysicalDeviceQueueFamilyProperties(m_PhysicalDevice, &queueFamilyCount, queueFamilies.data());
+
+        for (uint32_t i = 0; i < queueFamilyCount; i++)
+        {
+            VkBool32 presentSupport = VK_FALSE;
+            vkGetPhysicalDeviceSurfaceSupportKHR(m_PhysicalDevice, i, m_Surface, &presentSupport);
+
+            if ((queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) && presentSupport)
+            {
+                m_GraphicsQueueFamily = static_cast<int>(i);
+                break;
+            }
+        }
+
+        if (m_GraphicsQueueFamily == -1)
+        {
+            throw std::runtime_error("No queue family found that supports both graphics and present!");
+        }
+
+        // Re-request the same Vulkan 1.1 / 1.3 / extended-dynamic-state feature
+        // chain used in isDeviceSuitable() — but this time we SET the fields to
+        // VK_TRUE to actually turn the features on, instead of just reading them
+        // to check support.
+        VkPhysicalDeviceExtendedDynamicStateFeaturesEXT extendedDynamicStateFeatures{};
+        extendedDynamicStateFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT;
+        extendedDynamicStateFeatures.extendedDynamicState = VK_TRUE;
+
+        VkPhysicalDeviceVulkan13Features vulkan13Features{};
+        vulkan13Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+        vulkan13Features.pNext = &extendedDynamicStateFeatures;
+        vulkan13Features.dynamicRendering = VK_TRUE;
+        vulkan13Features.synchronization2 = VK_TRUE;
+
+        VkPhysicalDeviceVulkan11Features vulkan11Features{};
+        vulkan11Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+        vulkan11Features.pNext = &vulkan13Features;
+        vulkan11Features.shaderDrawParameters = VK_TRUE;
+
+        VkPhysicalDeviceFeatures2 deviceFeatures2{};
+        deviceFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+        deviceFeatures2.pNext = &vulkan11Features;
+
+        float queuePriority = 0.5f;
+        VkDeviceQueueCreateInfo deviceQueueCreateInfo{};
+        deviceQueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        deviceQueueCreateInfo.queueFamilyIndex = static_cast<uint32_t>(m_GraphicsQueueFamily);
+        deviceQueueCreateInfo.queueCount = 1;
+        deviceQueueCreateInfo.pQueuePriorities = &queuePriority;
+
+        VkDeviceCreateInfo deviceCreateInfo{};
+        deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+        deviceCreateInfo.pNext = &deviceFeatures2; // feature chain goes in via pNext
+        deviceCreateInfo.queueCreateInfoCount = 1;
+        deviceCreateInfo.pQueueCreateInfos = &deviceQueueCreateInfo;
+        deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(kRequiredDeviceExtensions.size());
+        deviceCreateInfo.ppEnabledExtensionNames = kRequiredDeviceExtensions.data();
+
+        if (vkCreateDevice(m_PhysicalDevice, &deviceCreateInfo, nullptr, &m_Device) != VK_SUCCESS)
+        {
+            throw std::runtime_error("failed to create logical device!");
+        }
+
+        vkGetDeviceQueue(m_Device, static_cast<uint32_t>(m_GraphicsQueueFamily), 0, &m_GraphicsQueue);
+    }
+
+    // Finds if device is suitable - old version
+    /*
+    bool Application::isDeviceSuitable(VkPhysicalDevice device)
+    {
+        VkPhysicalDeviceProperties deviceProperties{};
+        vkGetPhysicalDeviceProperties(device, &deviceProperties);
+        bool supportsVulkan1_3 = deviceProperties.apiVersion >= VK_API_VERSION_1_3;
+
+        uint32_t queueFamilyCount = 0;
+        vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+        std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+        vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+
+        bool supportsGraphics = false;
+        for (const auto& queueFamily : queueFamilies)
+        {
+            if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+            {
+                supportsGraphics = true;
+                break;
+            }
+        }
+
+        uint32_t extensionCount = 0;
+        vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
+        std::vector<VkExtensionProperties> availableExtensions(extensionCount);
+        vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
+
+        bool supportsAllRequiredExtensions = true;
+        for (const char* requiredExtension : kRequiredDeviceExtensions)
+        {
+            bool found = false;
+            for (const auto& availableExtension : availableExtensions)
+            {
+                if (strcmp(availableExtension.extensionName, requiredExtension) == 0)
+                {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found)
+            {
+                supportsAllRequiredExtensions = false;
+                break;
+            }
+        }
+
+        VkPhysicalDeviceExtendedDynamicStateFeaturesEXT extendedDynamicStateFeatures{};
+        extendedDynamicStateFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT;
+
+        VkPhysicalDeviceVulkan13Features vulkan13Features{};
+        vulkan13Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+        vulkan13Features.pNext = &extendedDynamicStateFeatures;
+
+        VkPhysicalDeviceVulkan11Features vulkan11Features{};
+        vulkan11Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+        vulkan11Features.pNext = &vulkan13Features;
+
+        VkPhysicalDeviceFeatures2 deviceFeatures2{};
+        deviceFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+        deviceFeatures2.pNext = &vulkan11Features;
+
+        vkGetPhysicalDeviceFeatures2(device, &deviceFeatures2);
+
+        bool supportsRequiredFeatures = vulkan11Features.shaderDrawParameters && vulkan13Features.dynamicRendering &&
+                                        extendedDynamicStateFeatures.extendedDynamicState;
+
+        return supportsVulkan1_3 && supportsGraphics && supportsAllRequiredExtensions && supportsRequiredFeatures;
+    }
+    */
+
+    // Create Logical Device // - old version
+    /*
     void Application::createLogicalDevice()
     {
         // Find the first queue family that supports graphics.
@@ -414,7 +617,7 @@ namespace Foxy
         }
 
         vkGetDeviceQueue(m_Device, static_cast<uint32_t>(m_GraphicsQueueFamily), 0, &m_GraphicsQueue);
-    }
+    }*/
 
     // Window Surface //
     void Application::createSurface()
@@ -998,4 +1201,5 @@ namespace Foxy
         createSwapChain();
         createImageViews();
     }
+
 } // namespace Foxy

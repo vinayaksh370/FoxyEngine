@@ -7,6 +7,10 @@
 #include <GLFW/glfw3.h>
 #include <vulkan/vulkan.h>
 
+#include <nvrhi/nvrhi.h>
+#include <nvrhi/vulkan.h>
+#include <nvrhi/validation.h>
+
 #include <cstdint>   // For exact number types
 #include <string>    // For text strings
 #include <vector>    // For lists/arrays
@@ -188,6 +192,28 @@ namespace Foxy
 #else
         static constexpr bool kEnableValidationLayers = true;
 #endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        // --------------------------------------------
+        // NVRHI Experiment (isolated — creates an nvrhi::IDevice wrapper
+        // around our existing raw-Vulkan device, but nothing uses it yet.
+        // Not part of the render loop. See context file for the plan.)
+        // --------------------------------------------
+        nvrhi::DeviceHandle m_NvrhiDevice;
+
+        void createNvrhiDeviceExperiment();
     };
 
 } // namespace Foxy

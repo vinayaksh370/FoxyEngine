@@ -4,11 +4,27 @@
 #include <string>
 #include <stdexcept>
 
+// Hardcoded triangle vertex data, uploaded once to m_VertexBuffer in createVertexBuffer().
+// Layout must match Vertex::GetAttributeDescriptions() and basic_triangle.slang's VertexInput.
+struct Vertex
+{
+    float position[2];
+    float color[3];
+};
+
+//static const std::vector<Vertex> kVertices = {
+//    {{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}}, 
+//    {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}}, 
+//    {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}};
+
+const std::vector<Vertex> kVertices = {
+    {{0.0f, -0.5f}, {1.0f, 1.0f, 1.0f}}, {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}}, {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}};
+
 namespace
 {
     // NVRHI wants a message callback object to report its own internal
     // errors/warnings through, separate from the Vulkan validation layer.
-    class NvrhiMessageCallback : public nvrhi::IMessageCallback
+    /*class NvrhiMessageCallback : public nvrhi::IMessageCallback
     {
     public:
         void message(nvrhi::MessageSeverity severity, const char* messageText) override
@@ -17,7 +33,7 @@ namespace
         }
     };
 
-    NvrhiMessageCallback s_NvrhiMessageCallback;
+    NvrhiMessageCallback s_NvrhiMessageCallback;*/
 
     //// 
 
@@ -49,8 +65,29 @@ namespace
     }
 } // anonymous namespace
 
+
 namespace Foxy
 {
+    Application::Application(const ApplicationSpecification& specification) : m_AppSpec(specification)
+    {
+         //initWindow();
+
+        //s_Application = this;
+
+        //glfwSetErrorCallback(GLFWErrorCallback);
+        //glfwInit();
+
+        //// Set window title to app name if empty
+        //if (m_Specification.WindowSpec.Title.empty())
+        //    m_Specification.WindowSpec.Title = m_Specification.Name;
+
+        //m_Specification.WindowSpec.EventCallback = [this](Event& event) { RaiseEvent(event); };
+
+        //m_Window = std::make_shared<Window>(m_Specification.WindowSpec);
+        //m_Window->Create();
+
+        //Renderer::Utils::InitOpenGLDebugMessageCallback();
+    }
 
     void Application::Run()
     {
@@ -67,8 +104,7 @@ namespace Foxy
         //glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);    // Simple Resizable or not
         glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);    // Simple Resizable or not
 
-        m_Window = glfwCreateWindow(ApplicationSpecification::Width, ApplicationSpecification::Height,
-                                    ApplicationSpecification::Name.c_str(), nullptr, nullptr);
+        m_Window = glfwCreateWindow(m_AppSpec.Width, m_AppSpec.Height, m_AppSpec.Name.c_str(), nullptr, nullptr);
 
         glfwSetWindowUserPointer(m_Window, this);
         glfwSetFramebufferSizeCallback(m_Window, framebufferResizeCallback);
@@ -81,13 +117,12 @@ namespace Foxy
         createSurface();
         pickPhysicalDevice();
         createLogicalDevice();
-        ////
         //createNvrhiDeviceExperiment(); // isolated experiment, see Section 5 of context file
-        ////
         createSwapChain();
         createImageViews();
         createGraphicsPipeline();
         createCommandPool();
+        createVertexBuffer();
         createCommandBuffers();
         createSyncObjects();
     }
@@ -120,6 +155,9 @@ namespace Foxy
             vkDestroyFence(m_Device, fence, nullptr);
         }
 
+        vkDestroyBuffer(m_Device, m_VertexBuffer, nullptr);
+        vkFreeMemory(m_Device, m_VertexBufferMemory, nullptr);
+
         vkDestroyCommandPool(m_Device, m_CommandPool, nullptr);
         vkDestroyPipeline(m_Device, m_GraphicsPipeline, nullptr);
         vkDestroyPipelineLayout(m_Device, m_PipelineLayout, nullptr);
@@ -127,7 +165,7 @@ namespace Foxy
         cleanupSwapChain();
 
         vkDestroyDevice(m_Device, nullptr);
-        vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr); 
+        vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);
 
         if (kEnableValidationLayers)
         {
@@ -989,6 +1027,7 @@ namespace Foxy
     }
 
     // Record Command Buffer
+    // Record all drawing commands for one swap chain image //
     void Application::recordCommandBuffer(uint32_t imageIndex)
     {
         VkCommandBuffer commandBuffer = m_CommandBuffers[m_FrameIndex];
@@ -1046,7 +1085,11 @@ namespace Foxy
         scissor.extent = m_SwapChainExtent;
         vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-        vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+        VkBuffer vertexBuffers[] = {m_VertexBuffer};
+        VkDeviceSize offsets[] = {0};
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+
+        vkCmdDraw(commandBuffer, static_cast<uint32_t>(kVertices.size()), 1, 0, 0);
 
         vkCmdEndRendering(commandBuffer);
 
@@ -1202,4 +1245,61 @@ namespace Foxy
         createImageViews();
     }
 
+    // Create the vertex buffer and upload kVertices into it.
+    // Uses HOST_VISIBLE|HOST_COHERENT memory for simplicity — the upcoming
+    // Staging buffer chapter replaces this with a faster DEVICE_LOCAL approach.
+    void Application::createVertexBuffer()
+    {
+        VkBufferCreateInfo bufferInfo{};
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.size = sizeof(kVertices[0]) * kVertices.size();
+        bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        if (vkCreateBuffer(m_Device, &bufferInfo, nullptr, &m_VertexBuffer) != VK_SUCCESS)
+        {
+            throw std::runtime_error("failed to create vertex buffer!");
+        }
+
+        VkMemoryRequirements memRequirements{};
+        vkGetBufferMemoryRequirements(m_Device, m_VertexBuffer, &memRequirements);
+
+        VkMemoryAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        allocInfo.allocationSize = memRequirements.size;
+        allocInfo.memoryTypeIndex = findMemoryType(
+            memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+        if (vkAllocateMemory(m_Device, &allocInfo, nullptr, &m_VertexBufferMemory) != VK_SUCCESS)
+        {
+            throw std::runtime_error("failed to allocate vertex buffer memory!");
+        }
+
+        vkBindBufferMemory(m_Device, m_VertexBuffer, m_VertexBufferMemory, 0);
+
+        void* data = nullptr;
+        vkMapMemory(m_Device, m_VertexBufferMemory, 0, bufferInfo.size, 0, &data);
+        memcpy(data, kVertices.data(), static_cast<size_t>(bufferInfo.size));
+        vkUnmapMemory(m_Device, m_VertexBufferMemory);
+    }
+
+    // Find a memory type on the physical device that satisfies both typeFilter
+    // (what the buffer/image itself needs) and properties (e.g. CPU-visible).
+    uint32_t Application::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
+    {
+        VkPhysicalDeviceMemoryProperties memProperties{};
+        vkGetPhysicalDeviceMemoryProperties(m_PhysicalDevice, &memProperties);
+
+        for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++)
+        {
+            if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties)
+            {
+                return i;
+            }
+        }
+
+        throw std::runtime_error("failed to find suitable memory type!");
+    }
+
 } // namespace Foxy
+

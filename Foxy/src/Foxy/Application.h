@@ -2,34 +2,33 @@
 
 #pragma once
 
+#include <vulkan/vulkan_raii.hpp>
+
 #define GLFW_INCLUDE_NONE // Don't use OpenGL
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
-#include <vulkan/vulkan.h>
 
 #include <nvrhi/nvrhi.h>
 #include <nvrhi/vulkan.h>
 #include <nvrhi/validation.h>
 
-#include <cstdint>   // For exact number types
-#include <string>    // For text strings
-#include <vector>    // For lists/arrays
-#include <iostream>  // For printing messages
-#include <algorithm> // For std::clamp
-#include <fstream>   // For r/w files
+#include "Foxy/vk_types.h"
 
 namespace Foxy
 {
-    // Application Settings - Window Specifications
+    // Application Settings - Window Specifications Defaults
     struct ApplicationSpecification
     {
-        static inline std::string Name = "Foxy Engine"; // What to call our app
-        static constexpr uint32_t Width = 1600;         // Window width in pixels
-        static constexpr uint32_t Height = 900;         // Window height in pixels
+        std::string Name = "Foxy App"; 
+        uint32_t Width = 1600;         
+        uint32_t Height = 900;         
     };
 
     class Application
     {
+    public:
+        Application(const ApplicationSpecification& specification);
+        //~Application();
     public:
         void Run();
 
@@ -45,6 +44,7 @@ namespace Foxy
         // --------------------------------------------
         GLFWwindow* m_Window = nullptr; // The actual window we draw on
         bool m_FramebufferResized = false; // Set by GLFW's resize callback, checked in drawFrame()
+        ApplicationSpecification m_AppSpec;
 
         static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
 
@@ -167,6 +167,15 @@ namespace Foxy
         void drawFrame();
 
         // --------------------------------------------
+        // Vertex Buffer
+        // --------------------------------------------
+        VkBuffer m_VertexBuffer = VK_NULL_HANDLE;
+        VkDeviceMemory m_VertexBufferMemory = VK_NULL_HANDLE;
+
+        void createVertexBuffer();
+        uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+
+        // --------------------------------------------
         // Debug/Validation - Like having a teacher check our work
         // --------------------------------------------
 
@@ -217,6 +226,8 @@ namespace Foxy
     };
 
 } // namespace Foxy
+
+
 
 // #pragma once
 //

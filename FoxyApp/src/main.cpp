@@ -9,13 +9,16 @@ int main()
 {
     try
     {
-        Foxy::Application app;
+        Foxy::ApplicationSpecification spec;
+        spec.Name = "Foxy Engine";
+
+        Foxy::Application app(spec);
         app.Run();
 
         // #ifdef _DEBUG
         //         deviceParams.enableDebugRuntime = true;
         //         deviceParams.enableNvrhiValidationLayer = true;
-        // #endif
+        // #endif2
     }
     catch (const std::exception& e)
     {

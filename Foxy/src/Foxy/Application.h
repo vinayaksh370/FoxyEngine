@@ -23,6 +23,7 @@ VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
 #include "vk_types.h"
 
+
 namespace Foxy
 {
     // Application Settings - Window Specifications Defaults
@@ -65,7 +66,8 @@ namespace Foxy
         vk::raii::Device                 m_Device = nullptr;                 // LogicalDevice :: Our "connection" to the chosen GPU
         vk::raii::Queue                  m_GraphicsQueue = nullptr;          // Where we submit graphics commands
         int                              m_GraphicsQueueFamily = -1;         // unchanged - plain int, never was a Vulkan 
-        nvrhi::DeviceHandle              m_DeviceDesc;                       // Device Handle 
+        nvrhi::DeviceHandle              m_NvrhiDevice;
+
 
 
         // The features we need from our graphics card
@@ -74,16 +76,18 @@ namespace Foxy
         };
 
         // Vulkan setup helpers
-        void createInstance();                                    // Create the Vulkan connection
-        void setupDebugMessenger();                               // Set up the error catcher
-        bool checkValidationLayerSupport();                       // Check if error catcher is available
-        std::vector<const char*> getRequiredInstanceExtensions(); // Get needed features
+        void createInstance();                                         // Create the Vulkan connection
+        void setupDebugMessenger();                                    // Set up the error catcher
+        bool checkValidationLayerSupport();                            // Check if error catcher is available
+        std::vector<const char*> getRequiredInstanceExtensions();      // Get needed features
 
         void pickPhysicalDevice();                                     // Prefer Dedicated ; FallBack Integrated
         bool isDeviceSuitable(const vk::raii::PhysicalDevice& device); // Check if card is good enough
 
         void createLogicalDevice();                                    // Create the logical device + get its queue
         void createSurface();                                          // Create the window surface
+
+        void createNvrhiDevice();
 
         // --------------------------------------------
         // Swap Chain
@@ -165,10 +169,8 @@ namespace Foxy
         void createVertexBuffer();
         uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 
-        // --------------------------------------------
         // Debug/Validation - Like having a teacher check our work
-        // --------------------------------------------
-        // 
+        
         // func catches Vulkan mistakes
         static VKAPI_ATTR vk::Bool32 VKAPI_CALL debugCallback(
             vk::DebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
@@ -186,33 +188,13 @@ namespace Foxy
 // Turn on Validation Layers only when DEBUG mode
 #ifdef NDEBUG
         static constexpr bool kEnableValidationLayers = false;
+        static constexpr bool kEnableNvrhiValidationLayers = false;
 #else
         static constexpr bool kEnableValidationLayers = true;
+        static constexpr bool kEnableNvrhiValidationLayers = true;
 #endif
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-        // --------------------------------------------
-        // NVRHI Experiment (isolated — creates an nvrhi::IDevice wrapper
-        // around our existing raw-Vulkan device, but nothing uses it yet.
-        // Not part of the render loop. See context file for the plan.)
-        // --------------------------------------------
-        nvrhi::DeviceHandle m_NvrhiDevice;
-
-        void createNvrhiDeviceExperiment();
     };
-
 } // namespace Foxy
 
 

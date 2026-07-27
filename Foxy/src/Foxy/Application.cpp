@@ -20,12 +20,22 @@ const std::vector<Vertex> kVertices = {
 
 namespace
 {
+    // Nvrhi Validation Layer -> display error msg
+    class NvrhiMessageCallback : public nvrhi::IMessageCallback
+    {
+    public:
+        void message(nvrhi::MessageSeverity severity, const char* messageText) override
+        {
+            std::cerr << "NVRHI: " << messageText << std::endl;
+        }
+    };
+    NvrhiMessageCallback s_NvrhiMessageCallback;
+
     VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,
                                           const VkAllocationCallbacks* pAllocator,
                                           VkDebugUtilsMessengerEXT* pDebugMessenger)
     {
-        auto func =
-            (PFN_vkCreateDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
+        auto func =  (PFN_vkCreateDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
         if (func != nullptr)
         {
             return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
@@ -39,8 +49,7 @@ namespace
     void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger,
                                        const VkAllocationCallbacks* pAllocator)
     {
-        auto func =
-            (PFN_vkDestroyDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+        auto func = (PFN_vkDestroyDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
         if (func != nullptr)
         {
             func(instance, debugMessenger, pAllocator);
@@ -90,7 +99,7 @@ namespace Foxy
         createSurface();
         pickPhysicalDevice();
         createLogicalDevice();
-        // createNvrhiDeviceExperiment(); // isolated experiment, see Section 5 of context file
+        createNvrhiDevice(); // isolated experiment, see Section 5 of context file
         createSwapChain();
         createImageViews();
         createGraphicsPipeline();
@@ -344,7 +353,7 @@ namespace Foxy
         return supportsVulkan1_3 && supportsGraphics && supportsAllRequiredExtensions && supportsRequiredFeatures;
     }
 
-    // Window Surface //
+    /* Window Surface */ 
     void Application::createSurface()
     {
         VkSurfaceKHR surface;
@@ -355,7 +364,7 @@ namespace Foxy
         m_Surface = vk::raii::SurfaceKHR(m_Instance, surface);
     }
 
-    // Create Logical Device //
+    /* Create Logical Device */
     void Application::createLogicalDevice()
     {
         std::vector<vk::QueueFamilyProperties> queueFamilies = m_ChosenGPU.getQueueFamilyProperties();
@@ -400,11 +409,37 @@ namespace Foxy
 
         m_Device = vk::raii::Device(m_ChosenGPU, deviceCreateInfo);
         m_GraphicsQueue = vk::raii::Queue(m_Device, static_cast<uint32_t>(m_GraphicsQueueFamily), 0);
-
-        device = vk::raii::Device(physicalDevice, deviceCreateInfo);
-        queue = vk::raii::Queue(device, queueIndex, 0);
     }
 
+    void Application::createNVRHIDevice()
+    {
+        nvrhi::vulkan::DeviceDesc deviceDesc
+        {
+            .errorCB = &s_NvrhiMessageCallback,
+            .physicalDevice = *m_ChosenGPU,
+            .device = *m_Device,
+            .graphicsQueue = *m_GraphicsQueue,
+            .graphicsQueueIndex = m_GraphicsQueueFamily,
+            .deviceExtensions = const_cast<char**>(kRequiredDeviceExtensions.data()), 
+            .numDeviceExtensions = kRequiredDeviceExtensions.size()
+        };
+        m_NvrhiDevice = nvrhi::vulkan::createDevice(deviceDesc);
+    
+        if (!m_NvrhiDevice)
+        {
+            std::cout << "[NVRHI] Device wrapper creation FAILED." << std::endl;
+            return;
+        }
+    
+        std::cout << "[NVRHI ] Device wrapper created successfully." << std::endl;
+    
+        if (kEnableNvrhiValidationLayers)
+        {
+            nvrhi::DeviceHandle validationLayer = nvrhi::validation::createValidationLayer(m_NvrhiDevice);
+            m_NvrhiDevice = validationLayer; // route everything through the validation layer from here on
+            std::cout << "[NVRHI] Validation layer active." << std::endl;
+        }
+    }
 
     // SwapChain Setup //
     void Application::createSwapChain()

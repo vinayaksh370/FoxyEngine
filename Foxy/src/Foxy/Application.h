@@ -69,7 +69,7 @@ namespace Foxy
         VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE; // The chosen graphics card
         vk::raii::PhysicalDevice m_ChosenGPU = nullptr;
         void pickPhysicalDevice();                      // Choose a graphics card
-        bool isDeviceSuitable(VkPhysicalDevice device); // Check if card is good enough
+        bool isDeviceSuitable(const vk::raii::PhysicalDevice& device); // Check if card is good enough
 
         // The features we need from our graphics card
         const std::vector<char const*> kRequiredDeviceExtensions = {

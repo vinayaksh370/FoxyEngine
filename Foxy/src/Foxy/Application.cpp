@@ -133,13 +133,6 @@ namespace Foxy
         vkDestroyDevice(m_Device, nullptr);
         vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);
 
-        if (kEnableValidationLayers)
-        {
-            DestroyDebugUtilsMessengerEXT(m_Instance, m_DebugMessenger, nullptr);
-        }
-
-        vkDestroyInstance(m_Instance, nullptr);
-
         glfwDestroyWindow(m_Window);
         glfwTerminate();
     }
@@ -254,121 +247,6 @@ namespace Foxy
         m_DebugMessenger = m_Instance.createDebugUtilsMessengerEXT(createInfo);
     }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    // PHYSICAL DEVICE
-    void Application::pickPhysicalDevice()
-    {
-        uint32_t deviceCount = 0;
-        vkEnumeratePhysicalDevices(m_Instance, &deviceCount, nullptr);
-
-        if (deviceCount == 0)
-        {
-            throw std::runtime_error("failed to find GPUs with Vulkan support!");
-        }
-
-        std::vector<VkPhysicalDevice> devices(deviceCount);
-        vkEnumeratePhysicalDevices(m_Instance, &deviceCount, devices.data());
-
-        for (const auto& device : devices)
-        {
-            if (isDeviceSuitable(device))
-            {
-                m_PhysicalDevice = device;
-                break;
-            }
-        }
-
-        if (m_PhysicalDevice == VK_NULL_HANDLE)
-        {
-            throw std::runtime_error("failed to find a suitable GPU!");
-        }
-    }
-
-    // Finds if device is suitable
-    bool Application::isDeviceSuitable(VkPhysicalDevice device)
-    {
-        VkPhysicalDeviceProperties deviceProperties{};
-        vkGetPhysicalDeviceProperties(device, &deviceProperties);
-        bool supportsVulkan1_3 = deviceProperties.apiVersion >= VK_API_VERSION_1_3;
-
-        uint32_t queueFamilyCount = 0;
-        vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
-        std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-        vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
-
-        bool supportsGraphics = false;
-        for (const auto& queueFamily : queueFamilies)
-        {
-            if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
-            {
-                supportsGraphics = true;
-                break;
-            }
-        }
-
-        uint32_t extensionCount = 0;
-        vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
-        std::vector<VkExtensionProperties> availableExtensions(extensionCount);
-        vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
-
-        bool supportsAllRequiredExtensions = true;
-        for (const char* requiredExtension : kRequiredDeviceExtensions)
-        {
-            bool found = false;
-            for (const auto& availableExtension : availableExtensions)
-            {
-                if (strcmp(availableExtension.extensionName, requiredExtension) == 0)
-                {
-                    found = true;
-                    break;
-                }
-            }
-            if (!found)
-            {
-                supportsAllRequiredExtensions = false;
-                break;
-            }
-        }
-
-        VkPhysicalDeviceExtendedDynamicStateFeaturesEXT extendedDynamicStateFeatures{};
-        extendedDynamicStateFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT;
-
-        VkPhysicalDeviceVulkan13Features vulkan13Features{};
-        vulkan13Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
-        vulkan13Features.pNext = &extendedDynamicStateFeatures;
-
-        VkPhysicalDeviceVulkan11Features vulkan11Features{};
-        vulkan11Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
-        vulkan11Features.pNext = &vulkan13Features;
-
-        VkPhysicalDeviceFeatures2 deviceFeatures2{};
-        deviceFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-        deviceFeatures2.pNext = &vulkan11Features;
-
-        vkGetPhysicalDeviceFeatures2(device, &deviceFeatures2);
-
-        bool supportsRequiredFeatures = vulkan11Features.shaderDrawParameters && vulkan13Features.dynamicRendering &&
-                                        vulkan13Features.synchronization2 &&
-                                        extendedDynamicStateFeatures.extendedDynamicState;
-
-        return supportsVulkan1_3 && supportsGraphics && supportsAllRequiredExtensions && supportsRequiredFeatures;
-    }
-
-
-
     // PHYSICAL DEVICE
     void Application::pickPhysicalDevice()
     {
@@ -379,19 +257,35 @@ namespace Foxy
             throw std::runtime_error("failed to find GPUs with Vulkan support!");
         }
 
+        // Collect every suitable device instead of stopping at the first one, so we
+        // can prefer a discrete GPU over an integrated one when both are present.
+        std::vector<vk::raii::PhysicalDevice> suitableDevices;
         for (const auto& device : physicalDevices)
         {
             if (isDeviceSuitable(device))
             {
-                m_ChosenGPU = device; // copy assignment - valid, PhysicalDevice is copyable
+                suitableDevices.push_back(device);
+            }
+        }
+
+        if (suitableDevices.empty())
+        {
+            throw std::runtime_error("failed to find a suitable GPU!");
+        }
+
+        // Prefer a discrete GPU (dedicated graphics card) over an integrated one.
+        // Falls back to whichever suitable device came first if no discrete GPU exists.
+        m_ChosenGPU = suitableDevices[0];
+        for (const auto& device : suitableDevices)
+        {
+            if (device.getProperties().deviceType == vk::PhysicalDeviceType::eDiscreteGpu)
+            {
+                m_ChosenGPU = device;
                 break;
             }
         }
 
-        if (!(*m_PhysicalDevice))
-        {
-            throw std::runtime_error("failed to find a suitable GPU!");
-        }
+        std::cout << "Selected GPU: " << m_ChosenGPU.getProperties().deviceName << std::endl;
     }
 
     // Finds if device is suitable
@@ -444,25 +338,6 @@ namespace Foxy
 
         return supportsVulkan1_3 && supportsGraphics && supportsAllRequiredExtensions && supportsRequiredFeatures;
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     // Create Logical Device //
     void Application::createLogicalDevice()
@@ -539,153 +414,6 @@ namespace Foxy
 
         vkGetDeviceQueue(m_Device, static_cast<uint32_t>(m_GraphicsQueueFamily), 0, &m_GraphicsQueue);
     }
-
-    // Finds if device is suitable - old version
-    /*
-    bool Application::isDeviceSuitable(VkPhysicalDevice device)
-    {
-        VkPhysicalDeviceProperties deviceProperties{};
-        vkGetPhysicalDeviceProperties(device, &deviceProperties);
-        bool supportsVulkan1_3 = deviceProperties.apiVersion >= VK_API_VERSION_1_3;
-
-        uint32_t queueFamilyCount = 0;
-        vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
-        std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-        vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
-
-        bool supportsGraphics = false;
-        for (const auto& queueFamily : queueFamilies)
-        {
-            if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
-            {
-                supportsGraphics = true;
-                break;
-            }
-        }
-
-        uint32_t extensionCount = 0;
-        vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
-        std::vector<VkExtensionProperties> availableExtensions(extensionCount);
-        vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
-
-        bool supportsAllRequiredExtensions = true;
-        for (const char* requiredExtension : kRequiredDeviceExtensions)
-        {
-            bool found = false;
-            for (const auto& availableExtension : availableExtensions)
-            {
-                if (strcmp(availableExtension.extensionName, requiredExtension) == 0)
-                {
-                    found = true;
-                    break;
-                }
-            }
-            if (!found)
-            {
-                supportsAllRequiredExtensions = false;
-                break;
-            }
-        }
-
-        VkPhysicalDeviceExtendedDynamicStateFeaturesEXT extendedDynamicStateFeatures{};
-        extendedDynamicStateFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT;
-
-        VkPhysicalDeviceVulkan13Features vulkan13Features{};
-        vulkan13Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
-        vulkan13Features.pNext = &extendedDynamicStateFeatures;
-
-        VkPhysicalDeviceVulkan11Features vulkan11Features{};
-        vulkan11Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
-        vulkan11Features.pNext = &vulkan13Features;
-
-        VkPhysicalDeviceFeatures2 deviceFeatures2{};
-        deviceFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-        deviceFeatures2.pNext = &vulkan11Features;
-
-        vkGetPhysicalDeviceFeatures2(device, &deviceFeatures2);
-
-        bool supportsRequiredFeatures = vulkan11Features.shaderDrawParameters && vulkan13Features.dynamicRendering &&
-                                        extendedDynamicStateFeatures.extendedDynamicState;
-
-        return supportsVulkan1_3 && supportsGraphics && supportsAllRequiredExtensions && supportsRequiredFeatures;
-    }
-    */
-
-    // Create Logical Device // - old version
-    /*
-    void Application::createLogicalDevice()
-    {
-        // Find the first queue family that supports graphics.
-        // Tutorial uses std::ranges::find_if + assert(); we translate to a
-        // plain indexed loop since we're avoiding <algorithm>/<ranges> here,
-        // matching the style of isDeviceSuitable()'s queue-family loop.
-
-        uint32_t queueFamilyCount = 0;
-        vkGetPhysicalDeviceQueueFamilyProperties(m_PhysicalDevice, &queueFamilyCount, nullptr);
-        std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-        vkGetPhysicalDeviceQueueFamilyProperties(m_PhysicalDevice, &queueFamilyCount, queueFamilies.data());
-
-        for (uint32_t i = 0; i < queueFamilyCount; i++)
-        {
-            VkBool32 presentSupport = VK_FALSE;
-            vkGetPhysicalDeviceSurfaceSupportKHR(m_PhysicalDevice, i, m_Surface, &presentSupport);
-
-            if ((queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) && presentSupport)
-            {
-                m_GraphicsQueueFamily = static_cast<int>(i);
-                break;
-            }
-        }
-
-        if (m_GraphicsQueueFamily == -1)
-        {
-            throw std::runtime_error("No queue family found that supports both graphics and present!");
-        }
-
-        // Re-request the same Vulkan 1.1 / 1.3 / extended-dynamic-state feature
-        // chain used in isDeviceSuitable() — but this time we SET the fields to
-        // VK_TRUE to actually turn the features on, instead of just reading them
-        // to check support.
-        VkPhysicalDeviceExtendedDynamicStateFeaturesEXT extendedDynamicStateFeatures{};
-        extendedDynamicStateFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT;
-        extendedDynamicStateFeatures.extendedDynamicState = VK_TRUE;
-
-        VkPhysicalDeviceVulkan13Features vulkan13Features{};
-        vulkan13Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
-        vulkan13Features.pNext = &extendedDynamicStateFeatures;
-        vulkan13Features.dynamicRendering = VK_TRUE;
-
-        VkPhysicalDeviceVulkan11Features vulkan11Features{};
-        vulkan11Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
-        vulkan11Features.pNext = &vulkan13Features;
-        vulkan11Features.shaderDrawParameters = VK_TRUE;
-
-        VkPhysicalDeviceFeatures2 deviceFeatures2{};
-        deviceFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-        deviceFeatures2.pNext = &vulkan11Features;
-
-        float queuePriority = 0.5f;
-        VkDeviceQueueCreateInfo deviceQueueCreateInfo{};
-        deviceQueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-        deviceQueueCreateInfo.queueFamilyIndex = static_cast<uint32_t>(m_GraphicsQueueFamily);
-        deviceQueueCreateInfo.queueCount = 1;
-        deviceQueueCreateInfo.pQueuePriorities = &queuePriority;
-
-        VkDeviceCreateInfo deviceCreateInfo{};
-        deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-        deviceCreateInfo.pNext = &deviceFeatures2; // feature chain goes in via pNext
-        deviceCreateInfo.queueCreateInfoCount = 1;
-        deviceCreateInfo.pQueueCreateInfos = &deviceQueueCreateInfo;
-        deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(kRequiredDeviceExtensions.size());
-        deviceCreateInfo.ppEnabledExtensionNames = kRequiredDeviceExtensions.data();
-
-        if (vkCreateDevice(m_PhysicalDevice, &deviceCreateInfo, nullptr, &m_Device) != VK_SUCCESS)
-        {
-            throw std::runtime_error("failed to create logical device!");
-        }
-
-        vkGetDeviceQueue(m_Device, static_cast<uint32_t>(m_GraphicsQueueFamily), 0, &m_GraphicsQueue);
-    }*/
 
     // Window Surface //
     void Application::createSurface()

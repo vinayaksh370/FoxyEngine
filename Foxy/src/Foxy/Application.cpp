@@ -1,8 +1,6 @@
 // Foxy/src/Foxy/Application.cpp
 #include "Foxy/Application.h"
-#include <vector>
-#include <string>
-#include <stdexcept>
+#include "vk_types.h"
 
 // Hardcoded triangle vertex data, uploaded once to m_VertexBuffer in createVertexBuffer().
 // Layout must match Vertex::GetAttributeDescriptions() and basic_triangle.slang's VertexInput.
@@ -12,31 +10,16 @@ struct Vertex
     float color[3];
 };
 
-//static const std::vector<Vertex> kVertices = {
-//    {{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}}, 
-//    {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}}, 
-//    {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}};
+// static const std::vector<Vertex> kVertices = {
+//     {{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+//     {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
+//     {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}};
 
 const std::vector<Vertex> kVertices = {
     {{0.0f, -0.5f}, {1.0f, 1.0f, 1.0f}}, {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}}, {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}};
 
 namespace
 {
-    // NVRHI wants a message callback object to report its own internal
-    // errors/warnings through, separate from the Vulkan validation layer.
-    /*class NvrhiMessageCallback : public nvrhi::IMessageCallback
-    {
-    public:
-        void message(nvrhi::MessageSeverity severity, const char* messageText) override
-        {
-            std::cerr << "NVRHI: " << messageText << std::endl;
-        }
-    };
-
-    NvrhiMessageCallback s_NvrhiMessageCallback;*/
-
-    //// 
-
     VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,
                                           const VkAllocationCallbacks* pAllocator,
                                           VkDebugUtilsMessengerEXT* pDebugMessenger)
@@ -65,28 +48,11 @@ namespace
     }
 } // anonymous namespace
 
-
 namespace Foxy
 {
     Application::Application(const ApplicationSpecification& specification) : m_AppSpec(specification)
     {
-         //initWindow();
-
-        //s_Application = this;
-
-        //glfwSetErrorCallback(GLFWErrorCallback);
-        //glfwInit();
-
-        //// Set window title to app name if empty
-        //if (m_Specification.WindowSpec.Title.empty())
-        //    m_Specification.WindowSpec.Title = m_Specification.Name;
-
-        //m_Specification.WindowSpec.EventCallback = [this](Event& event) { RaiseEvent(event); };
-
-        //m_Window = std::make_shared<Window>(m_Specification.WindowSpec);
-        //m_Window->Create();
-
-        //Renderer::Utils::InitOpenGLDebugMessageCallback();
+        // initWindow();
     }
 
     void Application::Run()
@@ -101,8 +67,8 @@ namespace Foxy
     {
         glfwInit();
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-        //glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);    // Simple Resizable or not
-        glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);    // Simple Resizable or not
+        // glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);    // Simple Resizable or not
+        glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE); // Simple Resizable or not
 
         m_Window = glfwCreateWindow(m_AppSpec.Width, m_AppSpec.Height, m_AppSpec.Name.c_str(), nullptr, nullptr);
 
@@ -117,7 +83,7 @@ namespace Foxy
         createSurface();
         pickPhysicalDevice();
         createLogicalDevice();
-        //createNvrhiDeviceExperiment(); // isolated experiment, see Section 5 of context file
+        // createNvrhiDeviceExperiment(); // isolated experiment, see Section 5 of context file
         createSwapChain();
         createImageViews();
         createGraphicsPipeline();
@@ -139,8 +105,8 @@ namespace Foxy
 
     void Application::cleanup()
     {
-        //m_NvrhiDevice = nullptr; // release the NVRHI device wrapper (and validation layer, if active) before tearing
-                                 // down the raw VkDevice it wraps
+        // m_NvrhiDevice = nullptr; // release the NVRHI device wrapper (and validation layer, if active) before tearing
+        //  down the raw VkDevice it wraps
 
         for (auto semaphore : m_RenderFinishedSemaphores)
         {
@@ -178,38 +144,7 @@ namespace Foxy
         glfwTerminate();
     }
 
-    // Create an nvrhi::IDevice wrapper around our existing raw Vulkan device,
-    // then optionally wrap that in NVRHI's own validation layer (Debug only,
-    // mirroring kEnableValidationLayers). Purely experimental at this stage —
-    // nothing in Foxy uses m_NvrhiDevice for rendering yet.
-    //void Application::createNvrhiDeviceExperiment()
-    //{
-    //    nvrhi::vulkan::DeviceDesc deviceDesc{};
-    //    deviceDesc.errorCB = &s_NvrhiMessageCallback;
-    //    deviceDesc.physicalDevice = m_PhysicalDevice;
-    //    deviceDesc.device = m_Device;
-    //    deviceDesc.graphicsQueue = m_GraphicsQueue;
-    //    deviceDesc.graphicsQueueIndex = m_GraphicsQueueFamily;
-    //    deviceDesc.deviceExtensions = const_cast<char**>(kRequiredDeviceExtensions.data());
-    //    deviceDesc.numDeviceExtensions = kRequiredDeviceExtensions.size();
 
-    //    m_NvrhiDevice = nvrhi::vulkan::createDevice(deviceDesc);
-
-    //    if (!m_NvrhiDevice)
-    //    {
-    //        std::cout << "[NVRHI experiment] Device wrapper creation FAILED." << std::endl;
-    //        return;
-    //    }
-
-    //    std::cout << "[NVRHI experiment] Device wrapper created successfully." << std::endl;
-
-    //    if (kEnableValidationLayers)
-    //    {
-    //        nvrhi::DeviceHandle validationLayer = nvrhi::validation::createValidationLayer(m_NvrhiDevice);
-    //        m_NvrhiDevice = validationLayer; // route everything through the validation layer from here on
-    //        std::cout << "[NVRHI experiment] Validation layer active." << std::endl;
-    //    }
-    //}
     // CREATE INSTANCE:
     void Application::createInstance()
     {
@@ -218,28 +153,30 @@ namespace Foxy
             throw std::runtime_error("validation layers requested, but not available!");
         }
 
-        VkApplicationInfo appInfo{};
-        appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-        appInfo.pApplicationName = "IDK";
-        appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-        appInfo.pEngineName = "IDK Engine";
-        appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-        appInfo.apiVersion = VK_API_VERSION_1_4;
+        constexpr vk::ApplicationInfo appInfo{.pApplicationName = "IDK",
+                                              .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
+                                              .pEngineName = "IDK Engine",
+                                              .engineVersion = VK_MAKE_VERSION(1, 0, 0),
+                                              .apiVersion = vk::ApiVersion14};
 
-        // Required Extensions
+        // Get the required layers
+        std::vector<const char*> requiredLayers;
+        if (kEnableValidationLayers)
+        {
+            requiredLayers.assign(kValidationLayers.begin(), kValidationLayers.end());  
+        }
+
+        // Get the required extensions.
         auto requiredExtensions = getRequiredInstanceExtensions();
 
-        uint32_t extensionCount = 0;
-        vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
-        std::vector<VkExtensionProperties> extensionProperties(extensionCount);
-        vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensionProperties.data());
-
+        // Check if the required extensions are supported by the Vulkan implementation.
+        std::vector<vk::ExtensionProperties> extensionProperties = m_Context.enumerateInstanceExtensionProperties();
         for (const char* requiredExtension : requiredExtensions)
         {
             bool found = false;
-            for (const auto& ext : extensionProperties)
+            for (const auto& extensionProperty : extensionProperties)
             {
-                if (strcmp(ext.extensionName, requiredExtension) == 0)
+                if (strcmp(extensionProperty.extensionName, requiredExtension) == 0)
                 {
                     found = true;
                     break;
@@ -249,75 +186,38 @@ namespace Foxy
                 throw std::runtime_error(std::string("Required extension not supported: ") + requiredExtension);
         }
 
-        VkInstanceCreateInfo createInfo{};
-        createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-        createInfo.pApplicationInfo = &appInfo;
-        createInfo.enabledExtensionCount = static_cast<uint32_t>(requiredExtensions.size());
-        createInfo.ppEnabledExtensionNames = requiredExtensions.data();
+        vk::InstanceCreateInfo createInfo{.pApplicationInfo = &appInfo,
+                                          .enabledLayerCount = static_cast<uint32_t>(requiredLayers.size()),
+                                          .ppEnabledLayerNames = requiredLayers.data(),
+                                          .enabledExtensionCount = static_cast<uint32_t>(requiredExtensions.size()),
+                                          .ppEnabledExtensionNames = requiredExtensions.data()};
 
-        if (kEnableValidationLayers)
-        {
-            createInfo.enabledLayerCount = static_cast<uint32_t>(kValidationLayers.size());
-            createInfo.ppEnabledLayerNames = kValidationLayers.data();
-        }
-        else
-        {
-            createInfo.enabledLayerCount = 0;
-        }
-
-        if (vkCreateInstance(&createInfo, nullptr, &m_Instance) != VK_SUCCESS)
-            throw std::runtime_error("failed to create instance!");
+        // Throws vk::SystemError on failure - no manual VK_SUCCESS check needed.
+        // m_Context is what actually bootstraps m_Instance here - this is the one
+        // place the Context we talked about earlier gets used directly.
+        m_Instance = vk::raii::Instance(m_Context, createInfo);
     }
 
     bool Application::checkValidationLayerSupport()
     {
-        uint32_t layerCount = 0;
-        vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
-
-        std::vector<VkLayerProperties> availableLayers(layerCount);
-        vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
-
+        std::vector<vk::LayerProperties> layerProperties = m_Context.enumerateInstanceLayerProperties();
         for (const char* layerName : kValidationLayers)
         {
             bool layerFound = false;
-
-            for (const auto& layerProperties : availableLayers)
+            for (const auto& layerProperty : layerProperties)
             {
-                if (strcmp(layerName, layerProperties.layerName) == 0)
+                if (strcmp(layerName, layerProperty.layerName) == 0)
                 {
                     layerFound = true;
                     break;
                 }
             }
-
             if (!layerFound)
             {
                 return false;
             }
         }
-
         return true;
-    }
-    void Application::setupDebugMessenger()
-    {
-        if (!kEnableValidationLayers)
-        {
-            return;
-        }
-
-        VkDebugUtilsMessengerCreateInfoEXT createInfo{};
-        createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-        createInfo.messageSeverity =
-            VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-        createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-                                 VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-                                 VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-        createInfo.pfnUserCallback = debugCallback;
-
-        if (CreateDebugUtilsMessengerEXT(m_Instance, &createInfo, nullptr, &m_DebugMessenger) != VK_SUCCESS)
-        {
-            throw std::runtime_error("failed to set up debug messenger!");
-        }
     }
 
     std::vector<const char*> Application::getRequiredInstanceExtensions()
@@ -334,6 +234,39 @@ namespace Foxy
 
         return extensions;
     }
+
+    void Application::setupDebugMessenger()
+    {
+        if (!kEnableValidationLayers)
+        {
+            return;
+        }
+
+        vk::DebugUtilsMessageSeverityFlagsEXT severityFlags(vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
+                                                            vk::DebugUtilsMessageSeverityFlagBitsEXT::eError);
+        vk::DebugUtilsMessageTypeFlagsEXT messageTypeFlags(vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral |
+                                                           vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation |
+                                                           vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance);
+
+        vk::DebugUtilsMessengerCreateInfoEXT createInfo{
+            .messageSeverity = severityFlags, .messageType = messageTypeFlags, .pfnUserCallback = &debugCallback};
+
+        m_DebugMessenger = m_Instance.createDebugUtilsMessengerEXT(createInfo);
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     // PHYSICAL DEVICE
     void Application::pickPhysicalDevice()
@@ -433,6 +366,103 @@ namespace Foxy
 
         return supportsVulkan1_3 && supportsGraphics && supportsAllRequiredExtensions && supportsRequiredFeatures;
     }
+
+
+
+    // PHYSICAL DEVICE
+    void Application::pickPhysicalDevice()
+    {
+        std::vector<vk::raii::PhysicalDevice> physicalDevices = m_Instance.enumeratePhysicalDevices();
+
+        if (physicalDevices.empty())
+        {
+            throw std::runtime_error("failed to find GPUs with Vulkan support!");
+        }
+
+        for (const auto& device : physicalDevices)
+        {
+            if (isDeviceSuitable(device))
+            {
+                m_ChosenGPU = device; // copy assignment - valid, PhysicalDevice is copyable
+                break;
+            }
+        }
+
+        if (!(*m_PhysicalDevice))
+        {
+            throw std::runtime_error("failed to find a suitable GPU!");
+        }
+    }
+
+    // Finds if device is suitable
+    bool Application::isDeviceSuitable(const vk::raii::PhysicalDevice& device)
+    {
+        vk::PhysicalDeviceProperties deviceProperties = device.getProperties();
+        bool supportsVulkan1_3 = deviceProperties.apiVersion >= vk::ApiVersion13;
+
+        std::vector<vk::QueueFamilyProperties> queueFamilies = device.getQueueFamilyProperties();
+        bool supportsGraphics = false;
+        for (const auto& queueFamily : queueFamilies)
+        {
+            if (queueFamily.queueFlags & vk::QueueFlagBits::eGraphics)
+            {
+                supportsGraphics = true;
+                break;
+            }
+        }
+
+        std::vector<vk::ExtensionProperties> availableExtensions = device.enumerateDeviceExtensionProperties();
+        bool supportsAllRequiredExtensions = true;
+        for (const char* requiredExtension : kRequiredDeviceExtensions)
+        {
+            bool found = false;
+            for (const auto& availableExtension : availableExtensions)
+            {
+                if (strcmp(availableExtension.extensionName, requiredExtension) == 0)
+                {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found)
+            {
+                supportsAllRequiredExtensions = false;
+                break;
+            }
+        }
+
+        auto features =
+            device
+                .getFeatures2<vk::PhysicalDeviceFeatures2, vk::PhysicalDeviceVulkan11Features,
+                              vk::PhysicalDeviceVulkan13Features, vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>();
+
+        bool supportsRequiredFeatures =
+            features.get<vk::PhysicalDeviceVulkan11Features>().shaderDrawParameters &&
+            features.get<vk::PhysicalDeviceVulkan13Features>().dynamicRendering &&
+            features.get<vk::PhysicalDeviceVulkan13Features>().synchronization2 &&
+            features.get<vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>().extendedDynamicState;
+
+        return supportsVulkan1_3 && supportsGraphics && supportsAllRequiredExtensions && supportsRequiredFeatures;
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     // Create Logical Device //
     void Application::createLogicalDevice()
@@ -1302,4 +1332,3 @@ namespace Foxy
     }
 
 } // namespace Foxy
-

@@ -2,17 +2,26 @@
 
 #pragma once
 
+#define VULKAN_HPP_NO_STRUCT_CONSTRUCTORS
+#if defined(__INTELLISENSE__) || !defined(USE_CPP20_MODULES)
 #include <vulkan/vulkan_raii.hpp>
+#else
+import vulkan_hpp;
+#endif
+
+// Define the Vulkan dynamic dispatcher - this needs to occur in exactly one cpp file in the program.
+#define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
+VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
 #define GLFW_INCLUDE_NONE // Don't use OpenGL
-#define GLFW_INCLUDE_VULKAN
+//#define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
 #include <nvrhi/nvrhi.h>
 #include <nvrhi/vulkan.h>
 #include <nvrhi/validation.h>
 
-#include "Foxy/vk_types.h"
+#include "vk_types.h"
 
 namespace Foxy
 {
@@ -39,20 +48,16 @@ namespace Foxy
         void mainLoop();   // The main game/draw loop
         void cleanup();    // Clean up when closing
 
-        // --------------------------------------------
         // Window Settings
-        // --------------------------------------------
         GLFWwindow* m_Window = nullptr; // The actual window we draw on
         bool m_FramebufferResized = false; // Set by GLFW's resize callback, checked in drawFrame()
         ApplicationSpecification m_AppSpec;
 
         static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
 
-        // --------------------------------------------
-        // Vulkan Connection
-        // --------------------------------------------
-        VkInstance m_Instance = VK_NULL_HANDLE;                     // Connection to Vulkan
-        VkDebugUtilsMessengerEXT m_DebugMessenger = VK_NULL_HANDLE; // Error catcher
+        vk::raii::Context m_Context;                                 // Loads its own constructer
+        vk::raii::Instance m_Instance = nullptr;                     // Connection to Vulkan 
+        vk::raii::DebugUtilsMessengerEXT m_DebugMessenger = nullptr; // Error catcher 
 
         // Vulkan setup helpers
         void createInstance();                                    // Create the Vulkan connection
@@ -60,12 +65,9 @@ namespace Foxy
         bool checkValidationLayerSupport();                       // Check if error catcher is available
         std::vector<const char*> getRequiredInstanceExtensions(); // Get needed features
 
-        // --------------------------------------------
         // Graphics Card Selection
-        // --------------------------------------------
         VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE; // The chosen graphics card
-
-        // Helper functions for finding a graphics card
+        vk::raii::PhysicalDevice m_ChosenGPU = nullptr;
         void pickPhysicalDevice();                      // Choose a graphics card
         bool isDeviceSuitable(VkPhysicalDevice device); // Check if card is good enough
 
@@ -178,18 +180,16 @@ namespace Foxy
         // --------------------------------------------
         // Debug/Validation - Like having a teacher check our work
         // --------------------------------------------
-
+        // 
         // func catches Vulkan mistakes
-        static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
-            VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,    // How serious is the error?
-            VkDebugUtilsMessageTypeFlagsEXT messageType,               // What type of error?
-            const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, // The error details
-            void* pUserData                                            // Extra data (not used)
-        )
+        static VKAPI_ATTR vk::Bool32 VKAPI_CALL debugCallback(
+            vk::DebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+            vk::DebugUtilsMessageTypeFlagsEXT messageType,
+            const vk::DebugUtilsMessengerCallbackDataEXT* pCallbackData, 
+            void* pUserData)
         {
-            // Print the error message
             std::cerr << "validation layer: " << pCallbackData->pMessage << std::endl;
-            return VK_FALSE; // Tell Vulkan "I saw the error, keep going"
+            return vk::False; // Tell Vulkan "I saw the error, keep going"
         }
 
         // List of (validation layers) we want to use

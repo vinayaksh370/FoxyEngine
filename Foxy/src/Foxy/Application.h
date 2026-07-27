@@ -36,6 +36,7 @@ namespace Foxy
 
     class Application
     {
+
     public:
         Application(const ApplicationSpecification& specification);
         //~Application();
@@ -67,6 +68,10 @@ namespace Foxy
         vk::raii::Queue                  m_GraphicsQueue = nullptr;          // Where we submit graphics commands
         int                              m_GraphicsQueueFamily = -1;         // unchanged - plain int, never was a Vulkan 
         nvrhi::DeviceHandle              m_NvrhiDevice;
+        vk::raii::SwapchainKHR           m_SwapChain = nullptr;
+        std::vector<vk::Image>           m_SwapChainImages;
+        vk::SurfaceFormatKHR             m_SwapChainSurfaceFormat;
+        vk::Extent2D                     m_SwapChainExtent;
 
 
 
@@ -89,27 +94,17 @@ namespace Foxy
 
         void createNvrhiDevice();
 
-        // --------------------------------------------
-        // Swap Chain
-        // --------------------------------------------
-        VkSwapchainKHR m_SwapChain = VK_NULL_HANDLE;
-        std::vector<VkImage> m_SwapChainImages; // The actual images we render into
-        VkSurfaceFormatKHR m_SwapChainSurfaceFormat{};
-        VkExtent2D m_SwapChainExtent{};
-
         void createSwapChain();
-        void cleanupSwapChain();  // Destroys image views + swapchain (not the surface/device)
-        void recreateSwapChain(); // Waits for a valid size, then rebuilds the swapchain + image views
+        void cleanupSwapChain();
+        void recreateSwapChain();
 
-        // Swap chain helper functions
-        static uint32_t chooseSwapMinImageCount(const VkSurfaceCapabilitiesKHR& capabilities);
-        static VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
-        static VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
-        VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities); // not static, needs m_Window
+        // Swapchain Helper Func
+        static uint32_t             chooseSwapMinImageCount(const vk::SurfaceCapabilitiesKHR& capabilities);
+        static vk::SurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<vk::SurfaceFormatKHR>& availableFormats);
+        static vk::PresentModeKHR   chooseSwapPresentMode(const std::vector<vk::PresentModeKHR>& availablePresentModes);
+        vk::Extent2D                chooseSwapExtent(const vk::SurfaceCapabilitiesKHR& capabilities);
 
-        // --------------------------------------------
         // Image Views
-        // --------------------------------------------
         std::vector<VkImageView> m_SwapChainImageViews;
 
         void createImageViews();

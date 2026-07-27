@@ -76,6 +76,7 @@ function(add_slang_shaders)
 
         add_custom_target(${SHADER_NAME}_shader DEPENDS ${SHADER_OUT_PATH})
         add_dependencies(FoxyApp ${SHADER_NAME}_shader)
+        set_target_properties(${SHADER_NAME}_shader PROPERTIES FOLDER "Shaders")
     endforeach()
 endfunction()
 

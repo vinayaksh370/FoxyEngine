@@ -76,6 +76,13 @@ namespace Foxy
         glfwSetFramebufferSizeCallback(m_Window, framebufferResizeCallback);
     }
 
+    // Called from GLFW whenever the framebuffer size changes (e.g. window resize)
+    void Application::framebufferResizeCallback(GLFWwindow* window, int width, int height)
+    {
+        auto app = reinterpret_cast<Application*>(glfwGetWindowUserPointer(window));
+        app->m_FramebufferResized = true;
+    }
+
     void Application::initVulkan()
     {
         createInstance();
@@ -100,7 +107,7 @@ namespace Foxy
             glfwPollEvents();
             drawFrame();
         }
-        vkDeviceWaitIdle(m_Device); // wait for the GPU to finish before we start destroying resources
+        vkDeviceWaitIdle(*m_Device); // wait for the GPU to finish before we start destroying resources
     }
 
     void Application::cleanup()
@@ -131,12 +138,11 @@ namespace Foxy
         cleanupSwapChain();
 
         vkDestroyDevice(m_Device, nullptr);
-        vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);
+        vkDestroySurfaceKHR(*m_Instance, m_Surface, nullptr);
 
         glfwDestroyWindow(m_Window);
         glfwTerminate();
     }
-
 
     // CREATE INSTANCE:
     void Application::createInstance()
@@ -156,7 +162,7 @@ namespace Foxy
         std::vector<const char*> requiredLayers;
         if (kEnableValidationLayers)
         {
-            requiredLayers.assign(kValidationLayers.begin(), kValidationLayers.end());  
+            requiredLayers.assign(kValidationLayers.begin(), kValidationLayers.end());
         }
 
         // Get the required extensions.
@@ -247,7 +253,7 @@ namespace Foxy
         m_DebugMessenger = m_Instance.createDebugUtilsMessengerEXT(createInfo);
     }
 
-    // PHYSICAL DEVICE
+    // PHYSICAL DEVICE -> prefer DedicatedGPU || Fallback IntegratedGPU
     void Application::pickPhysicalDevice()
     {
         std::vector<vk::raii::PhysicalDevice> physicalDevices = m_Instance.enumeratePhysicalDevices();
@@ -325,8 +331,7 @@ namespace Foxy
             }
         }
 
-        auto features =
-            device
+        auto features = device
                 .getFeatures2<vk::PhysicalDeviceFeatures2, vk::PhysicalDeviceVulkan11Features,
                               vk::PhysicalDeviceVulkan13Features, vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>();
 
@@ -339,25 +344,26 @@ namespace Foxy
         return supportsVulkan1_3 && supportsGraphics && supportsAllRequiredExtensions && supportsRequiredFeatures;
     }
 
+    // Window Surface //
+    void Application::createSurface()
+    {
+        VkSurfaceKHR surface;
+        if (glfwCreateWindowSurface(*m_Instance, m_Window, nullptr, &surface) != VK_SUCCESS)
+        {
+            throw std::runtime_error("failed to create window surface!");
+        }
+        m_Surface = vk::raii::SurfaceKHR(m_Instance, surface);
+    }
+
     // Create Logical Device //
     void Application::createLogicalDevice()
     {
-        // Find the first queue family that supports graphics.
-        // Tutorial uses std::ranges::find_if + assert(); we translate to a
-        // plain indexed loop since we're avoiding <algorithm>/<ranges> here,
-        // matching the style of isDeviceSuitable()'s queue-family loop.
+        std::vector<vk::QueueFamilyProperties> queueFamilies = m_ChosenGPU.getQueueFamilyProperties();
 
-        uint32_t queueFamilyCount = 0;
-        vkGetPhysicalDeviceQueueFamilyProperties(m_PhysicalDevice, &queueFamilyCount, nullptr);
-        std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-        vkGetPhysicalDeviceQueueFamilyProperties(m_PhysicalDevice, &queueFamilyCount, queueFamilies.data());
-
-        for (uint32_t i = 0; i < queueFamilyCount; i++)
+        for (uint32_t i = 0; i < queueFamilies.size(); i++)  // Go through All queuefamily || Pick first that supports both graphics and present
         {
-            VkBool32 presentSupport = VK_FALSE;
-            vkGetPhysicalDeviceSurfaceSupportKHR(m_PhysicalDevice, i, m_Surface, &presentSupport);
-
-            if ((queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) && presentSupport)
+            if ((queueFamilies[i].queueFlags & vk::QueueFlagBits::eGraphics) &&
+                m_ChosenGPU.getSurfaceSupportKHR(i, m_Surface))
             {
                 m_GraphicsQueueFamily = static_cast<int>(i);
                 break;
@@ -369,60 +375,36 @@ namespace Foxy
             throw std::runtime_error("No queue family found that supports both graphics and present!");
         }
 
-        // Re-request the same Vulkan 1.1 / 1.3 / extended-dynamic-state feature
-        // chain used in isDeviceSuitable() — but this time we SET the fields to
-        // VK_TRUE to actually turn the features on, instead of just reading them
-        // to check support.
-        VkPhysicalDeviceExtendedDynamicStateFeaturesEXT extendedDynamicStateFeatures{};
-        extendedDynamicStateFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT;
-        extendedDynamicStateFeatures.extendedDynamicState = VK_TRUE;
-
-        VkPhysicalDeviceVulkan13Features vulkan13Features{};
-        vulkan13Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
-        vulkan13Features.pNext = &extendedDynamicStateFeatures;
-        vulkan13Features.dynamicRendering = VK_TRUE;
-        vulkan13Features.synchronization2 = VK_TRUE;
-
-        VkPhysicalDeviceVulkan11Features vulkan11Features{};
-        vulkan11Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
-        vulkan11Features.pNext = &vulkan13Features;
-        vulkan11Features.shaderDrawParameters = VK_TRUE;
-
-        VkPhysicalDeviceFeatures2 deviceFeatures2{};
-        deviceFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-        deviceFeatures2.pNext = &vulkan11Features;
+        // Re-request the same Vulkan 1.1 / 1.3 / extended-dynamic-state feature chain
+        // used in isDeviceSuitable() - but this time SET the fields to true to actually
+        // turn the features on, instead of just reading them to check support.
+        vk::StructureChain<vk::PhysicalDeviceFeatures2, vk::PhysicalDeviceVulkan11Features,
+                           vk::PhysicalDeviceVulkan13Features, vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>
+            featureChain = {
+                {},                                                   
+                {.shaderDrawParameters = true},                       
+                {.synchronization2 = true, .dynamicRendering = true}, 
+                {.extendedDynamicState = true}
+            };
 
         float queuePriority = 0.5f;
-        VkDeviceQueueCreateInfo deviceQueueCreateInfo{};
-        deviceQueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-        deviceQueueCreateInfo.queueFamilyIndex = static_cast<uint32_t>(m_GraphicsQueueFamily);
-        deviceQueueCreateInfo.queueCount = 1;
-        deviceQueueCreateInfo.pQueuePriorities = &queuePriority;
+        vk::DeviceQueueCreateInfo deviceQueueCreateInfo{.queueFamilyIndex = static_cast<uint32_t>(m_GraphicsQueueFamily),
+                                                        .queueCount = 1,
+                                                        .pQueuePriorities = &queuePriority};
 
-        VkDeviceCreateInfo deviceCreateInfo{};
-        deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-        deviceCreateInfo.pNext = &deviceFeatures2; // feature chain goes in via pNext
-        deviceCreateInfo.queueCreateInfoCount = 1;
-        deviceCreateInfo.pQueueCreateInfos = &deviceQueueCreateInfo;
-        deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(kRequiredDeviceExtensions.size());
-        deviceCreateInfo.ppEnabledExtensionNames = kRequiredDeviceExtensions.data();
+        vk::DeviceCreateInfo deviceCreateInfo{.pNext = &featureChain.get<vk::PhysicalDeviceFeatures2>(),
+                                              .queueCreateInfoCount = 1,
+                                              .pQueueCreateInfos = &deviceQueueCreateInfo,
+                                              .enabledExtensionCount = static_cast<uint32_t>(kRequiredDeviceExtensions.size()),
+                                              .ppEnabledExtensionNames = kRequiredDeviceExtensions.data()};
 
-        if (vkCreateDevice(m_PhysicalDevice, &deviceCreateInfo, nullptr, &m_Device) != VK_SUCCESS)
-        {
-            throw std::runtime_error("failed to create logical device!");
-        }
+        m_Device = vk::raii::Device(m_ChosenGPU, deviceCreateInfo);
+        m_GraphicsQueue = vk::raii::Queue(m_Device, static_cast<uint32_t>(m_GraphicsQueueFamily), 0);
 
-        vkGetDeviceQueue(m_Device, static_cast<uint32_t>(m_GraphicsQueueFamily), 0, &m_GraphicsQueue);
+        device = vk::raii::Device(physicalDevice, deviceCreateInfo);
+        queue = vk::raii::Queue(device, queueIndex, 0);
     }
 
-    // Window Surface //
-    void Application::createSurface()
-    {
-        if (glfwCreateWindowSurface(m_Instance, m_Window, nullptr, &m_Surface) != VK_SUCCESS)
-        {
-            throw std::runtime_error("failed to create window surface!");
-        }
-    }
 
     // SwapChain Setup //
     void Application::createSwapChain()
@@ -962,13 +944,6 @@ namespace Foxy
         }
 
         m_FrameIndex = (m_FrameIndex + 1) % kMaxFramesInFlight;
-    }
-
-    // Called from GLFW whenever the framebuffer size changes (e.g. window resize)
-    void Application::framebufferResizeCallback(GLFWwindow* window, int width, int height)
-    {
-        auto app = reinterpret_cast<Application*>(glfwGetWindowUserPointer(window));
-        app->m_FramebufferResized = true;
     }
 
     // Destroy everything tied to the current swap chain, without touching the surface/device.

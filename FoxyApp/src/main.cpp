@@ -1,9 +1,7 @@
 // FoxyApp/src/main.cpp
 #include "Foxy/Application.h"
 
-#include <cstdlib>
-#include <iostream>
-#include <stdexcept>
+#include "Foxy/vk_types.h"
 
 int main()
 {

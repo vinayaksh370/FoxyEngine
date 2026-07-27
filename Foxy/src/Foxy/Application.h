@@ -49,15 +49,29 @@ namespace Foxy
         void cleanup();    // Clean up when closing
 
         // Window Settings
-        GLFWwindow* m_Window = nullptr; // The actual window we draw on
-        bool m_FramebufferResized = false; // Set by GLFW's resize callback, checked in drawFrame()
+        GLFWwindow* m_Window = nullptr;         // The actual window we draw on
+        bool m_FramebufferResized = false;      // Set by GLFW's resize callback, checked in drawFrame()
         ApplicationSpecification m_AppSpec;
 
         static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
 
-        vk::raii::Context m_Context;                                 // Loads its own constructer
-        vk::raii::Instance m_Instance = nullptr;                     // Connection to Vulkan 
-        vk::raii::DebugUtilsMessengerEXT m_DebugMessenger = nullptr; // Error catcher 
+        // Vulkan Stuff
+
+        vk::raii::Context                m_Context;                          // Loads its own constructer
+        vk::raii::Instance               m_Instance = nullptr;               // Connection to Vulkan API
+        vk::raii::DebugUtilsMessengerEXT m_DebugMessenger = nullptr;         // Error catcher 
+        vk::raii::PhysicalDevice         m_ChosenGPU = nullptr;              // Selected PhysicalDevice or GPU
+        vk::raii::SurfaceKHR             m_Surface = nullptr;                // The surface we render/present into
+        vk::raii::Device                 m_Device = nullptr;                 // LogicalDevice :: Our "connection" to the chosen GPU
+        vk::raii::Queue                  m_GraphicsQueue = nullptr;          // Where we submit graphics commands
+        int                              m_GraphicsQueueFamily = -1;         // unchanged - plain int, never was a Vulkan 
+        nvrhi::DeviceHandle              m_DeviceDesc;                       // Device Handle 
+
+
+        // The features we need from our graphics card
+        const std::vector<char const*> kRequiredDeviceExtensions = {
+            VK_KHR_SWAPCHAIN_EXTENSION_NAME                          // Needed to show images on screen
+        };
 
         // Vulkan setup helpers
         void createInstance();                                    // Create the Vulkan connection
@@ -65,37 +79,11 @@ namespace Foxy
         bool checkValidationLayerSupport();                       // Check if error catcher is available
         std::vector<const char*> getRequiredInstanceExtensions(); // Get needed features
 
-        // Graphics Card Selection
-        VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE; // The chosen graphics card
-        vk::raii::PhysicalDevice m_ChosenGPU = nullptr;
-        void pickPhysicalDevice();                      // Choose a graphics card
+        void pickPhysicalDevice();                                     // Prefer Dedicated ; FallBack Integrated
         bool isDeviceSuitable(const vk::raii::PhysicalDevice& device); // Check if card is good enough
 
-        // The features we need from our graphics card
-        const std::vector<char const*> kRequiredDeviceExtensions = {
-            VK_KHR_SWAPCHAIN_EXTENSION_NAME // Needed to show images on screen
-        };
-
-        // --------------------------------------------
-        // Logical Device and Queues
-        // --------------------------------------------
-        VkDevice m_Device = VK_NULL_HANDLE;       // Our "connection" to the chosen GPU
-        VkQueue m_GraphicsQueue = VK_NULL_HANDLE; // Where we submit graphics commands
-
-        // Deliberate deviation from the tutorial: the tutorial uses a throwaway
-        // local `graphicsIndex` inside createLogicalDevice() and discards it.
-        // We keep it as a persistent member because NVRHI's DeviceDesc later
-        // needs the actual queue family index (int), not just the VkQueue handle.
-        int m_GraphicsQueueFamily = -1;
-
-        void createLogicalDevice(); // Create the logical device + get its queue
-
-        // --------------------------------------------
-        // Window Surface
-        // --------------------------------------------
-        VkSurfaceKHR m_Surface = VK_NULL_HANDLE; // The surface we render/present into
-
-        void createSurface(); // Create the window surface
+        void createLogicalDevice();                                    // Create the logical device + get its queue
+        void createSurface();                                          // Create the window surface
 
         // --------------------------------------------
         // Swap Chain

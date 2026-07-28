@@ -376,3 +376,28 @@ void Application::drawFrame()
         m_FrameIndex = (m_FrameIndex + 1) % kMaxFramesInFlight;
     }
 */
+
+// m_NvrhiDevice = nullptr; // release the NVRHI device wrapper (and validation layer, if active) before tearing
+//  down the raw VkDevice it wraps
+
+/*for (auto semaphore : m_RenderFinishedSemaphores)
+{
+    vkDestroySemaphore(m_Device, semaphore, nullptr);
+}
+for (auto semaphore : m_PresentCompleteSemaphores)
+{
+    vkDestroySemaphore(m_Device, semaphore, nullptr);
+}
+for (auto fence : m_InFlightFences)
+{
+    vkDestroyFence(m_Device, fence, nullptr);
+}
+
+vkDestroyBuffer(m_Device, m_VertexBuffer, nullptr);
+vkFreeMemory(m_Device, m_VertexBufferMemory, nullptr);
+
+vkDestroyCommandPool(m_Device, m_CommandPool, nullptr);
+vkDestroyPipeline(m_Device, m_GraphicsPipeline, nullptr);
+vkDestroyPipelineLayout(m_Device, m_PipelineLayout, nullptr);
+
+cleanupSwapChain();*/

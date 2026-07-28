@@ -2,16 +2,12 @@
 
 #pragma once
 
-#define VULKAN_HPP_NO_STRUCT_CONSTRUCTORS
-#if defined(__INTELLISENSE__) || !defined(USE_CPP20_MODULES)
-#include <vulkan/vulkan_raii.hpp>
-#else
-import vulkan_hpp;
-#endif
-
-// Define the Vulkan dynamic dispatcher - this needs to occur in exactly one cpp file in the program.
+//#define VULKAN_HPP_HANDLE_ERROR_OUT_OF_DATE_AS_SUCCESS 1
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
-VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
+#define VULKAN_HPP_NO_STRUCT_CONSTRUCTORS
+
+#include <vulkan/vulkan_raii.hpp>
+
 
 #define GLFW_INCLUDE_NONE // Don't use OpenGL
 //#define GLFW_INCLUDE_VULKAN
@@ -23,15 +19,14 @@ VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
 #include "vk_types.h"
 
-
 namespace Foxy
 {
     // Application Settings - Window Specifications Defaults
     struct ApplicationSpecification
     {
         std::string Name = "Foxy App"; 
-        uint32_t Width = 1600;         
-        uint32_t Height = 900;         
+        uint32_t Width   = 1600;         
+        uint32_t Height  = 900;         
     };
 
     class Application
@@ -83,10 +78,10 @@ namespace Foxy
 
         static constexpr int kMaxFramesInFlight = 2;
 
-        vk::raii::CommandPool m_CommandPool = nullptr;
+        // Command Pool/Buffers
+        vk::raii::CommandPool                m_CommandPool = nullptr;
         std::vector<vk::raii::CommandBuffer> m_CommandBuffers; // One per frame-in-flight; freed automatically when the pool is destroyed
 
-        
         // Synchronization
         std::vector<vk::raii::Semaphore> m_PresentCompleteSemaphores; // Signaled when a swapchain image is ready to render into
         std::vector<vk::raii::Semaphore> m_RenderFinishedSemaphores;  // Signaled when rendering is done, safe to present
@@ -108,9 +103,6 @@ namespace Foxy
 
         void createLogicalDevice();                                    // Create the logical device + get its queue
         void createSurface();                                          // Create the window surface
-
-        void createNvrhiDevice();
-        nvrhi::TextureHandle wrapSwapChainImageForNvrhi(vk::Image image);
 
         // SwapChain
         void createSwapChain();
@@ -134,6 +126,10 @@ namespace Foxy
 
         void createSyncObjects();
         void drawFrame();
+
+        // NVRHI STUFF
+        void createNvrhiDevice();
+        nvrhi::TextureHandle wrapSwapChainImageForNvrhi(vk::Image image);
 
         /*==========================================*/
         // Swapchain Helper Func & Other Helper Func
@@ -192,7 +188,12 @@ namespace Foxy
 } // namespace Foxy
 
 
-
+// #if defined(__INTELLISENSE__) || !defined(USE_CPP20_MODULES)
+// #include <vulkan/vulkan_raii.hpp>
+// #else
+// import vulkan_hpp;
+// #endif
+// 
 // #pragma once
 //
 // #include "Layer.h"

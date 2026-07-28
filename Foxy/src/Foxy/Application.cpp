@@ -2,6 +2,9 @@
 #include "Foxy/Application.h"
 #include "vk_types.h"
 
+// Define the Vulkan dynamic dispatcher - this needs to occur in exactly one cpp file in the program.
+VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
+
 // Hardcoded triangle vertex data, uploaded once to m_VertexBuffer in createVertexBuffer().
 // Layout must match Vertex::GetAttributeDescriptions() and basic_triangle.slang's VertexInput.
 struct Vertex
@@ -116,36 +119,12 @@ namespace Foxy
             glfwPollEvents();
             drawFrame();
         }
-        vkDeviceWaitIdle(*m_Device); // wait for the GPU to finish before we start destroying resources
+        //vkDeviceWaitIdle(*m_Device); // wait for the GPU to finish before we start destroying resources
+        m_Device.waitIdle();
     }
 
     void Application::cleanup()
     {
-        // m_NvrhiDevice = nullptr; // release the NVRHI device wrapper (and validation layer, if active) before tearing
-        //  down the raw VkDevice it wraps
-
-        /*for (auto semaphore : m_RenderFinishedSemaphores)
-        {
-            vkDestroySemaphore(m_Device, semaphore, nullptr);
-        }
-        for (auto semaphore : m_PresentCompleteSemaphores)
-        {
-            vkDestroySemaphore(m_Device, semaphore, nullptr);
-        }
-        for (auto fence : m_InFlightFences)
-        {
-            vkDestroyFence(m_Device, fence, nullptr);
-        }
-
-        vkDestroyBuffer(m_Device, m_VertexBuffer, nullptr);
-        vkFreeMemory(m_Device, m_VertexBufferMemory, nullptr);
-
-        vkDestroyCommandPool(m_Device, m_CommandPool, nullptr);
-        vkDestroyPipeline(m_Device, m_GraphicsPipeline, nullptr);
-        vkDestroyPipelineLayout(m_Device, m_PipelineLayout, nullptr);
-
-        cleanupSwapChain();*/
-
         glfwDestroyWindow(m_Window);
         glfwTerminate();
     }
@@ -492,7 +471,8 @@ namespace Foxy
             glfwWaitEvents();
         }
 
-        vkDeviceWaitIdle(*m_Device); // don't touch resources the GPU might still be using
+        //vkDeviceWaitIdle(*m_Device); // don't touch resources the GPU might still be using
+        m_Device.waitIdle();
 
         cleanupSwapChain();
         createSwapChain();
@@ -500,21 +480,21 @@ namespace Foxy
     }
 
     // Nvrhi Wrapper for SwapChainImages
-    nvrhi::TextureHandle Application::wrapSwapChainImageForNvrhi(vk::Image image)
-    {
-        nvrhi::TextureDesc textureDesc;
-        textureDesc.width = m_SwapChainExtent.width;
-        textureDesc.height = m_SwapChainExtent.height;
-        textureDesc.format =
-            nvrhi::Format::BGRA8_UNORM; // hardcoded mapping - would need a real vk::Format -> nvrhi::Format table
-        textureDesc.isRenderTarget = true;
-        textureDesc.initialState = nvrhi::ResourceStates::Present;
-        textureDesc.keepInitialState = true;
-        textureDesc.debugName = "SwapChainImage";
+    //nvrhi::TextureHandle Application::wrapSwapChainImageForNvrhi(vk::Image image)
+    //{
+    //    nvrhi::TextureDesc textureDesc;
+    //    textureDesc.width = m_SwapChainExtent.width;
+    //    textureDesc.height = m_SwapChainExtent.height;
+    //    textureDesc.format =
+    //        nvrhi::Format::BGRA8_UNORM; // hardcoded mapping - would need a real vk::Format -> nvrhi::Format table
+    //    textureDesc.isRenderTarget = true;
+    //    textureDesc.initialState = nvrhi::ResourceStates::Present;
+    //    textureDesc.keepInitialState = true;
+    //    textureDesc.debugName = "SwapChainImage";
 
-        return m_NvrhiDevice->createHandleForNativeTexture(nvrhi::ObjectTypes::VK_Image,
-                                                           nvrhi::Object(static_cast<VkImage>(image)), textureDesc);
-    }
+    //    return m_NvrhiDevice->createHandleForNativeTexture(nvrhi::ObjectTypes::VK_Image,
+    //                                                       nvrhi::Object(static_cast<VkImage>(image)), textureDesc);
+    //}
 
     // Create SwapChain Images Views //
     void Application::createImageViews()
@@ -711,8 +691,6 @@ namespace Foxy
     }
 
     // Create Sync Objects //
-    
-
     void Application::createSyncObjects()
     {
         assert(m_PresentCompleteSemaphores.empty() && m_RenderFinishedSemaphores.empty() && m_InFlightFences.empty());
@@ -730,6 +708,7 @@ namespace Foxy
     }
 
     // Draw Frame //
+    /*
     void Application::drawFrame()
     {
         // m_InFlightFences, m_PresentCompleteSemaphores, and m_CommandBuffers are indexed by m_FrameIndex,
@@ -774,6 +753,85 @@ namespace Foxy
                                                 .pSwapchains = &*m_SwapChain,
                                                 .pImageIndices = &imageIndex};
         result = m_GraphicsQueue.presentKHR(presentInfoKHR);
+
+        if ((result == vk::Result::eSuboptimalKHR) || (result == vk::Result::eErrorOutOfDateKHR) ||
+            m_FramebufferResized)
+        {
+            m_FramebufferResized = false;
+            recreateSwapChain();
+        }
+        else
+        {
+            assert(result == vk::Result::eSuccess);
+        }
+
+        m_FrameIndex = (m_FrameIndex + 1) % kMaxFramesInFlight;
+    }
+    */
+
+    void Application::drawFrame()
+    {
+        auto fenceResult = m_Device.waitForFences(*m_InFlightFences[m_FrameIndex], vk::True, UINT64_MAX);
+        if (fenceResult != vk::Result::eSuccess)
+        {
+            throw std::runtime_error("failed to wait for fence!");
+        }
+
+        uint32_t imageIndex;
+        try
+        {
+            auto [acquireResult, index] =
+                m_SwapChain.acquireNextImage(UINT64_MAX, *m_PresentCompleteSemaphores[m_FrameIndex], nullptr);
+            if (acquireResult == vk::Result::eErrorOutOfDateKHR)
+            {
+                recreateSwapChain();
+                return;
+            }
+            if (acquireResult != vk::Result::eSuccess && acquireResult != vk::Result::eSuboptimalKHR)
+            {
+                throw std::runtime_error("failed to acquire swap chain image!");
+            }
+            imageIndex = index;
+        }
+        catch (const vk::OutOfDateKHRError&)
+        {
+            recreateSwapChain();
+            return;
+        }
+
+        m_Device.resetFences(*m_InFlightFences[m_FrameIndex]);
+
+        m_CommandBuffers[m_FrameIndex].reset();
+        recordCommandBuffer(imageIndex);
+
+        vk::PipelineStageFlags waitDestinationStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput);
+        const vk::SubmitInfo submitInfo{.waitSemaphoreCount = 1,
+                                        .pWaitSemaphores = &*m_PresentCompleteSemaphores[m_FrameIndex],
+                                        .pWaitDstStageMask = &waitDestinationStageMask,
+                                        .commandBufferCount = 1,
+                                        .pCommandBuffers = &*m_CommandBuffers[m_FrameIndex],
+                                        .signalSemaphoreCount = 1,
+                                        .pSignalSemaphores = &*m_RenderFinishedSemaphores[imageIndex]};
+        m_GraphicsQueue.submit(submitInfo, *m_InFlightFences[m_FrameIndex]);
+
+        const vk::PresentInfoKHR presentInfoKHR{.waitSemaphoreCount = 1,
+                                                .pWaitSemaphores = &*m_RenderFinishedSemaphores[imageIndex],
+                                                .swapchainCount = 1,
+                                                .pSwapchains = &*m_SwapChain,
+                                                .pImageIndices = &imageIndex};
+
+        vk::Result result;
+        try
+        {
+            result = m_GraphicsQueue.presentKHR(presentInfoKHR);
+        }
+        catch (const vk::OutOfDateKHRError&)
+        {
+            m_FramebufferResized = false;
+            recreateSwapChain();
+            m_FrameIndex = (m_FrameIndex + 1) % kMaxFramesInFlight;
+            return;
+        }
 
         if ((result == vk::Result::eSuboptimalKHR) || (result == vk::Result::eErrorOutOfDateKHR) ||
             m_FramebufferResized)

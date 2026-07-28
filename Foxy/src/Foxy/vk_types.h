@@ -11,6 +11,7 @@
 #include <stdexcept>
 #include <format>
 #include <ranges>
+#include <cassert>   // For assert()
 
 #include <cstdint>   // For exact number types
 #include <string>    // For text strings
@@ -21,11 +22,10 @@
 
 #include <vulkan/vulkan.h>
 #include <vulkan/vk_enum_string_helper.h>
-//#include <vk_mem_alloc.h>
-
 
 #include <glm/mat4x4.hpp>
 #include <glm/vec4.hpp>
+//#include <vk_mem_alloc.h>
 //#define VK_CHECK(x)                                                                                                    \
 //    do                                                                                                                 \
 //    {                                                                                                                  \

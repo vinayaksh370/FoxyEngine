@@ -59,21 +59,39 @@ namespace Foxy
 
         // Vulkan Stuff
 
-        vk::raii::Context                m_Context;                          // Loads its own constructer
-        vk::raii::Instance               m_Instance = nullptr;               // Connection to Vulkan API
-        vk::raii::DebugUtilsMessengerEXT m_DebugMessenger = nullptr;         // Error catcher 
-        vk::raii::PhysicalDevice         m_ChosenGPU = nullptr;              // Selected PhysicalDevice or GPU
-        vk::raii::SurfaceKHR             m_Surface = nullptr;                // The surface we render/present into
-        vk::raii::Device                 m_Device = nullptr;                 // LogicalDevice :: Our "connection" to the chosen GPU
-        vk::raii::Queue                  m_GraphicsQueue = nullptr;          // Where we submit graphics commands
-        int                              m_GraphicsQueueFamily = -1;         // unchanged - plain int, never was a Vulkan 
-        nvrhi::DeviceHandle              m_NvrhiDevice;
-        vk::raii::SwapchainKHR           m_SwapChain = nullptr;
-        std::vector<vk::Image>           m_SwapChainImages;
-        vk::SurfaceFormatKHR             m_SwapChainSurfaceFormat;
-        vk::Extent2D                     m_SwapChainExtent;
+        vk::raii::Context                 m_Context;                          // Loads its own constructer
+        vk::raii::Instance                m_Instance = nullptr;               // Connection to Vulkan API
+        vk::raii::DebugUtilsMessengerEXT  m_DebugMessenger = nullptr;         // Error catcher 
+        vk::raii::PhysicalDevice          m_ChosenGPU = nullptr;              // Selected PhysicalDevice or GPU
+        vk::raii::SurfaceKHR              m_Surface = nullptr;                // The surface we render/present into
+        vk::raii::Device                  m_Device = nullptr;                 // LogicalDevice :: Our "connection" to the chosen GPU
+        vk::raii::Queue                   m_GraphicsQueue = nullptr;          // Where we submit graphics commands
+        int                               m_GraphicsQueueFamily = -1;         // unchanged - plain int, never was a Vulkan 
+
+        nvrhi::DeviceHandle               m_NvrhiDevice;
+        std::vector<nvrhi::TextureHandle> m_NvrhiSwapChainImages;
+
+        vk::raii::SwapchainKHR            m_SwapChain = nullptr;
+        std::vector<vk::Image>            m_SwapChainImages;
+        vk::SurfaceFormatKHR              m_SwapChainSurfaceFormat;
+        vk::Extent2D                      m_SwapChainExtent;
+        std::vector<vk::raii::ImageView>  m_SwapChainImageViews;
 
 
+        vk::raii::PipelineLayout          m_PipelineLayout = nullptr;         // Describes uniform/push-constant layout (empty for now)
+        vk::raii::Pipeline                m_GraphicsPipeline = nullptr;       // The actual baked pipeline object
+
+        static constexpr int kMaxFramesInFlight = 2;
+
+        vk::raii::CommandPool m_CommandPool = nullptr;
+        std::vector<vk::raii::CommandBuffer> m_CommandBuffers; // One per frame-in-flight; freed automatically when the pool is destroyed
+
+        
+        // Synchronization
+        std::vector<vk::raii::Semaphore> m_PresentCompleteSemaphores; // Signaled when a swapchain image is ready to render into
+        std::vector<vk::raii::Semaphore> m_RenderFinishedSemaphores;  // Signaled when rendering is done, safe to present
+        std::vector<vk::raii::Fence>     m_InFlightFences;            // Signaled when the GPU is done with a given frame-in-flight's work
+        uint32_t                         m_FrameIndex = 0;            // Cycles 0..kMaxFramesInFlight-1 every drawFrame() call
 
         // The features we need from our graphics card
         const std::vector<char const*> kRequiredDeviceExtensions = {
@@ -84,7 +102,6 @@ namespace Foxy
         void createInstance();                                         // Create the Vulkan connection
         void setupDebugMessenger();                                    // Set up the error catcher
         bool checkValidationLayerSupport();                            // Check if error catcher is available
-        std::vector<const char*> getRequiredInstanceExtensions();      // Get needed features
 
         void pickPhysicalDevice();                                     // Prefer Dedicated ; FallBack Integrated
         bool isDeviceSuitable(const vk::raii::PhysicalDevice& device); // Check if card is good enough
@@ -93,76 +110,58 @@ namespace Foxy
         void createSurface();                                          // Create the window surface
 
         void createNvrhiDevice();
+        nvrhi::TextureHandle wrapSwapChainImageForNvrhi(vk::Image image);
 
+        // SwapChain
         void createSwapChain();
         void cleanupSwapChain();
         void recreateSwapChain();
 
-        // Swapchain Helper Func
+        void createImageViews();                                       // Image Views
+
+        // Graphics Pipeline
+        void createGraphicsPipeline();                                                    // Build the programmable shader stages for the pipeline
+
+        vk::raii::ShaderModule   createShaderModule(const std::vector<char>& code) const; // Wrap SPIR-V bytecode in a shader module
+        static std::vector<char> readFile(const std::string& filename);                   // Load a binary file (e.g. compiled shader) into memory
+
+        // CommandPools & CommandBuffers
+        void createCommandPool();
+        void createCommandBuffers();
+        void recordCommandBuffer(uint32_t imageIndex);
+
+        // Synchronization
+
+        void createSyncObjects();
+        void drawFrame();
+
+        /*==========================================*/
+        // Swapchain Helper Func & Other Helper Func
+        /*==========================================*/
+
         static uint32_t             chooseSwapMinImageCount(const vk::SurfaceCapabilitiesKHR& capabilities);
         static vk::SurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<vk::SurfaceFormatKHR>& availableFormats);
         static vk::PresentModeKHR   chooseSwapPresentMode(const std::vector<vk::PresentModeKHR>& availablePresentModes);
         vk::Extent2D                chooseSwapExtent(const vk::SurfaceCapabilitiesKHR& capabilities);
 
-        // Image Views
-        std::vector<VkImageView> m_SwapChainImageViews;
-
-        void createImageViews();
-
-        // --------------------------------------------
-        // Graphics Pipeline
-        // --------------------------------------------
-        void createGraphicsPipeline(); // Build the programmable shader stages for the pipeline
-
-        VkShaderModule
-        createShaderModule(const std::vector<char>& code) const; // Wrap SPIR-V bytecode in a shader module
-        static std::vector<char>
-        readFile(const std::string& filename); // Load a binary file (e.g. compiled shader) into memory
-
-        VkPipelineLayout m_PipelineLayout =
-            VK_NULL_HANDLE; // Describes uniform/push-constant layout for the pipeline (empty for now)
-
-        VkPipeline m_GraphicsPipeline = VK_NULL_HANDLE; // The actual baked pipeline object
-
-        // --------------------------------------------
-        // Command Pool / Command Buffer
-        // --------------------------------------------
-        static constexpr int kMaxFramesInFlight = 2;
-
-        VkCommandPool m_CommandPool = VK_NULL_HANDLE;
-        std::vector<VkCommandBuffer> m_CommandBuffers; // One per frame-in-flight; freed automatically when the pool is destroyed
-
-        void createCommandPool();
-        void createCommandBuffers();
-        void recordCommandBuffer(uint32_t imageIndex);
+        std::vector<const char*> getRequiredInstanceExtensions(); // Get needed features
 
         // Transitions a swap chain image between layouts (e.g. undefined -> color attachment -> present)
-        void transitionImageLayout(uint32_t imageIndex, VkImageLayout oldLayout, VkImageLayout newLayout,
-                                   VkAccessFlags2 srcAccessMask, VkAccessFlags2 dstAccessMask,
-                                   VkPipelineStageFlags2 srcStageMask, VkPipelineStageFlags2 dstStageMask);
+        void transitionImageLayout(uint32_t imageIndex, vk::ImageLayout oldLayout, vk::ImageLayout newLayout,
+                                   vk::AccessFlags2 srcAccessMask, vk::AccessFlags2 dstAccessMask,
+                                   vk::PipelineStageFlags2 srcStageMask, vk::PipelineStageFlags2 dstStageMask);
 
-        // --------------------------------------------
-        // Synchronization
-        // --------------------------------------------
-        // m_PresentCompleteSemaphores and m_InFlightFences are indexed by m_FrameIndex (one per frame-in-flight).
-        // m_RenderFinishedSemaphores is indexed by imageIndex (one per swapchain image) - a frame-in-flight isn't
-        // guaranteed to always land on the same swapchain image, so this needs its own per-image semaphore.
-        std::vector<VkSemaphore> m_PresentCompleteSemaphores; // Signaled when a swapchain image is ready to render into
-        std::vector<VkSemaphore> m_RenderFinishedSemaphores;  // Signaled when rendering is done, safe to present
-        std::vector<VkFence> m_InFlightFences; // Signaled when the GPU is done with a given frame-in-flight's work
-        uint32_t m_FrameIndex = 0;             // Cycles 0..kMaxFramesInFlight-1 every drawFrame() call
 
-        void createSyncObjects();
-        void drawFrame();
+        
 
         // --------------------------------------------
         // Vertex Buffer
         // --------------------------------------------
-        VkBuffer m_VertexBuffer = VK_NULL_HANDLE;
+        /*VkBuffer m_VertexBuffer = VK_NULL_HANDLE;
         VkDeviceMemory m_VertexBufferMemory = VK_NULL_HANDLE;
 
         void createVertexBuffer();
-        uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+        uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);*/
 
         // Debug/Validation - Like having a teacher check our work
         

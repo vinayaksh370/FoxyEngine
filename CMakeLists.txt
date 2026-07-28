@@ -34,6 +34,7 @@ add_subdirectory(nvrhi)
 
 add_subdirectory(vendor/glfw)
 add_subdirectory(vendor/glm)
+add_subdirectory(vendor/spdlog)
 include(vendor/imgui.cmake)
 
 add_subdirectory(Foxy)

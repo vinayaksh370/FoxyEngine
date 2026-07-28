@@ -401,3 +401,125 @@ vkDestroyPipeline(m_Device, m_GraphicsPipeline, nullptr);
 vkDestroyPipelineLayout(m_Device, m_PipelineLayout, nullptr);
 
 cleanupSwapChain();*/
+
+
+ // Draw Frame //
+/*
+void Application::drawFrame()
+{
+    // m_InFlightFences, m_PresentCompleteSemaphores, and m_CommandBuffers are indexed by m_FrameIndex,
+    // while m_RenderFinishedSemaphores is indexed by imageIndex.
+    auto fenceResult = m_Device.waitForFences(*m_InFlightFences[m_FrameIndex], vk::True, UINT64_MAX);
+    if (fenceResult != vk::Result::eSuccess)
+    {
+        throw std::runtime_error("failed to wait for fence!");
+    }
+
+    auto [result, imageIndex] =
+        m_SwapChain.acquireNextImage(UINT64_MAX, *m_PresentCompleteSemaphores[m_FrameIndex], nullptr);
+
+    if (result == vk::Result::eErrorOutOfDateKHR)
+    {
+        recreateSwapChain();
+        return;
+    }
+    if (result != vk::Result::eSuccess && result != vk::Result::eSuboptimalKHR)
+    {
+        throw std::runtime_error("failed to acquire swap chain image!");
+    }
+
+    m_Device.resetFences(*m_InFlightFences[m_FrameIndex]);
+
+    m_CommandBuffers[m_FrameIndex].reset();
+    recordCommandBuffer(imageIndex);
+
+    vk::PipelineStageFlags waitDestinationStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput);
+    const vk::SubmitInfo submitInfo{.waitSemaphoreCount = 1,
+                                    .pWaitSemaphores = &*m_PresentCompleteSemaphores[m_FrameIndex],
+                                    .pWaitDstStageMask = &waitDestinationStageMask,
+                                    .commandBufferCount = 1,
+                                    .pCommandBuffers = &*m_CommandBuffers[m_FrameIndex],
+                                    .signalSemaphoreCount = 1,
+                                    .pSignalSemaphores = &*m_RenderFinishedSemaphores[imageIndex]};
+    m_GraphicsQueue.submit(submitInfo, *m_InFlightFences[m_FrameIndex]);
+
+    const vk::PresentInfoKHR presentInfoKHR{.waitSemaphoreCount = 1,
+                                            .pWaitSemaphores = &*m_RenderFinishedSemaphores[imageIndex],
+                                            .swapchainCount = 1,
+                                            .pSwapchains = &*m_SwapChain,
+                                            .pImageIndices = &imageIndex};
+    result = m_GraphicsQueue.presentKHR(presentInfoKHR);
+
+    if ((result == vk::Result::eSuboptimalKHR) || (result == vk::Result::eErrorOutOfDateKHR) ||
+        m_FramebufferResized)
+    {
+        m_FramebufferResized = false;
+        recreateSwapChain();
+    }
+    else
+    {
+        assert(result == vk::Result::eSuccess);
+    }
+
+    m_FrameIndex = (m_FrameIndex + 1) % kMaxFramesInFlight;
+}
+*/
+/*
+void Application::drawFrame()
+{
+    // m_InFlightFences, m_PresentCompleteSemaphores, and m_CommandBuffers are indexed by m_FrameIndex,
+    // while m_RenderFinishedSemaphores is indexed by imageIndex.
+    auto fenceResult = m_Device.waitForFences(*m_InFlightFences[m_FrameIndex], vk::True, UINT64_MAX);
+    if (fenceResult != vk::Result::eSuccess)
+    {
+        throw std::runtime_error("failed to wait for fence!");
+    }
+
+    auto [result, imageIndex] =
+        m_SwapChain.acquireNextImage(UINT64_MAX, *m_PresentCompleteSemaphores[m_FrameIndex], nullptr);
+
+    if (result == vk::Result::eErrorOutOfDateKHR)
+    {
+        recreateSwapChain();
+        return;
+    }
+    if (result != vk::Result::eSuccess && result != vk::Result::eSuboptimalKHR)
+    {
+        throw std::runtime_error("failed to acquire swap chain image!");
+    }
+
+    m_Device.resetFences(*m_InFlightFences[m_FrameIndex]);
+
+    m_CommandBuffers[m_FrameIndex].reset();
+    recordCommandBuffer(imageIndex);
+
+    vk::PipelineStageFlags waitDestinationStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput);
+    const vk::SubmitInfo submitInfo{.waitSemaphoreCount = 1,
+                                    .pWaitSemaphores = &*m_PresentCompleteSemaphores[m_FrameIndex],
+                                    .pWaitDstStageMask = &waitDestinationStageMask,
+                                    .commandBufferCount = 1,
+                                    .pCommandBuffers = &*m_CommandBuffers[m_FrameIndex],
+                                    .signalSemaphoreCount = 1,
+                                    .pSignalSemaphores = &*m_RenderFinishedSemaphores[imageIndex]};
+    m_GraphicsQueue.submit(submitInfo, *m_InFlightFences[m_FrameIndex]);
+
+    const vk::PresentInfoKHR presentInfoKHR{.waitSemaphoreCount = 1,
+                                            .pWaitSemaphores = &*m_RenderFinishedSemaphores[imageIndex],
+                                            .swapchainCount = 1,
+                                            .pSwapchains = &*m_SwapChain,
+                                            .pImageIndices = &imageIndex};
+    result = m_GraphicsQueue.presentKHR(presentInfoKHR);
+
+    if ((result == vk::Result::eSuboptimalKHR) || (result == vk::Result::eErrorOutOfDateKHR) || m_FramebufferResized)
+    {
+        m_FramebufferResized = false;
+        recreateSwapChain();
+    }
+    else
+    {
+        assert(result == vk::Result::eSuccess);
+    }
+
+    m_FrameIndex = (m_FrameIndex + 1) % kMaxFramesInFlight;
+}
+*/

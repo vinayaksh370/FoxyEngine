@@ -5,6 +5,8 @@
 // Define the Vulkan dynamic dispatcher - this needs to occur in exactly one cpp file in the program.
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
+
+
 // Hardcoded triangle vertex data, uploaded once to m_VertexBuffer in createVertexBuffer().
 // Layout must match Vertex::GetAttributeDescriptions() and basic_triangle.slang's VertexInput.
 struct Vertex
@@ -102,10 +104,15 @@ namespace Foxy
         createSurface();
         pickPhysicalDevice();
         createLogicalDevice();
+
+        // std::cout << "Hello Triangle" << std::endl;
         //createNvrhiDevice(); // isolated experiment, see Section 5 of context file
+
         createSwapChain();
         createImageViews();
         createGraphicsPipeline();
+
+
         createCommandPool();
         //createVertexBuffer();
         createCommandBuffers();
@@ -141,7 +148,7 @@ namespace Foxy
                                               .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
                                               .pEngineName = "IDK Engine",
                                               .engineVersion = VK_MAKE_VERSION(1, 0, 0),
-                                              .apiVersion = vk::ApiVersion14};
+                                              .apiVersion = vk::ApiVersion13};
 
         // Get the required layers
         std::vector<const char*> requiredLayers;
@@ -387,37 +394,41 @@ namespace Foxy
                                               .ppEnabledExtensionNames = kRequiredDeviceExtensions.data()};
 
         m_Device = vk::raii::Device(m_ChosenGPU, deviceCreateInfo);
+
+        //VULKAN_HPP_DEFAULT_DISPATCHER.init(*m_Device);
+
         m_GraphicsQueue = vk::raii::Queue(m_Device, static_cast<uint32_t>(m_GraphicsQueueFamily), 0);
     }
 
     // NVRHI DEVICE //
-    //void Application::createNvrhiDevice()
-    //{
-    //    std::vector<const char*> requiredLayers;
-    //    if (kEnableValidationLayers)
-    //    {
-    //        requiredLayers.assign(kValidationLayers.begin(), kValidationLayers.end());
-    //    }
-    //    nvrhi::vulkan::DeviceDesc deviceDesc
-    //    {
-    //        .errorCB             = &s_NvrhiMessageCallback,
-    //        .physicalDevice      = *m_ChosenGPU,
-    //        .device              = *m_Device,
-    //        .graphicsQueue       = *m_GraphicsQueue,
-    //        .graphicsQueueIndex  = m_GraphicsQueueFamily,
-    //        //.deviceExtensions    = const_cast<char**>(kRequiredDeviceExtensions.data()), 
-    //        .deviceExtensions =   requiredLayers.data(), 
-    //        .numDeviceExtensions = kRequiredDeviceExtensions.size()
-    //    };
-    //    m_NvrhiDevice = nvrhi::vulkan::createDevice(deviceDesc);
-    //
-    //    if (kEnableNvrhiValidationLayers)
-    //    {
-    //        nvrhi::DeviceHandle validationLayer = nvrhi::validation::createValidationLayer(m_NvrhiDevice);
-    //        m_NvrhiDevice = validationLayer; // route everything through the validation layer from here on
-    //        std::cout << "[NVRHI] Validation layer active." << std::endl;
-    //    }
-    //}
+    void Application::createNvrhiDevice()
+    {
+        std::vector<const char*> nvrhiDeviceExtensions(kRequiredDeviceExtensions.begin(),
+                                                       kRequiredDeviceExtensions.end());
+
+
+        nvrhi::vulkan::DeviceDesc deviceDesc
+        {
+            .errorCB             = &s_NvrhiMessageCallback,
+            .instance            = *m_Instance,
+            .physicalDevice      = *m_ChosenGPU,
+            .device              = *m_Device,
+            .graphicsQueue       = *m_GraphicsQueue,
+            .graphicsQueueIndex  = m_GraphicsQueueFamily,
+            .deviceExtensions    = nvrhiDeviceExtensions.data(), 
+            .numDeviceExtensions = kRequiredDeviceExtensions.size()
+        };
+        std::cout << "Hello Triangle" << std::endl;
+        m_NvrhiDevice = nvrhi::vulkan::createDevice(deviceDesc);
+        std::cout << "Hello Triangle" << std::endl;
+        
+        if (kEnableNvrhiValidationLayers)
+        {
+            nvrhi::DeviceHandle validationLayer = nvrhi::validation::createValidationLayer(m_NvrhiDevice);
+            m_NvrhiDevice = validationLayer; // route everything through the validation layer from here on
+            std::cout << "[NVRHI] Validation layer active." << std::endl;
+        }
+    }
 
     // SwapChain Setup //
     void Application::createSwapChain()
@@ -707,68 +718,7 @@ namespace Foxy
         }
     }
 
-    // Draw Frame //
-    /*
-    void Application::drawFrame()
-    {
-        // m_InFlightFences, m_PresentCompleteSemaphores, and m_CommandBuffers are indexed by m_FrameIndex,
-        // while m_RenderFinishedSemaphores is indexed by imageIndex.
-        auto fenceResult = m_Device.waitForFences(*m_InFlightFences[m_FrameIndex], vk::True, UINT64_MAX);
-        if (fenceResult != vk::Result::eSuccess)
-        {
-            throw std::runtime_error("failed to wait for fence!");
-        }
-
-        auto [result, imageIndex] =
-            m_SwapChain.acquireNextImage(UINT64_MAX, *m_PresentCompleteSemaphores[m_FrameIndex], nullptr);
-
-        if (result == vk::Result::eErrorOutOfDateKHR)
-        {
-            recreateSwapChain();
-            return;
-        }
-        if (result != vk::Result::eSuccess && result != vk::Result::eSuboptimalKHR)
-        {
-            throw std::runtime_error("failed to acquire swap chain image!");
-        }
-
-        m_Device.resetFences(*m_InFlightFences[m_FrameIndex]);
-
-        m_CommandBuffers[m_FrameIndex].reset();
-        recordCommandBuffer(imageIndex);
-
-        vk::PipelineStageFlags waitDestinationStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput);
-        const vk::SubmitInfo submitInfo{.waitSemaphoreCount = 1,
-                                        .pWaitSemaphores = &*m_PresentCompleteSemaphores[m_FrameIndex],
-                                        .pWaitDstStageMask = &waitDestinationStageMask,
-                                        .commandBufferCount = 1,
-                                        .pCommandBuffers = &*m_CommandBuffers[m_FrameIndex],
-                                        .signalSemaphoreCount = 1,
-                                        .pSignalSemaphores = &*m_RenderFinishedSemaphores[imageIndex]};
-        m_GraphicsQueue.submit(submitInfo, *m_InFlightFences[m_FrameIndex]);
-
-        const vk::PresentInfoKHR presentInfoKHR{.waitSemaphoreCount = 1,
-                                                .pWaitSemaphores = &*m_RenderFinishedSemaphores[imageIndex],
-                                                .swapchainCount = 1,
-                                                .pSwapchains = &*m_SwapChain,
-                                                .pImageIndices = &imageIndex};
-        result = m_GraphicsQueue.presentKHR(presentInfoKHR);
-
-        if ((result == vk::Result::eSuboptimalKHR) || (result == vk::Result::eErrorOutOfDateKHR) ||
-            m_FramebufferResized)
-        {
-            m_FramebufferResized = false;
-            recreateSwapChain();
-        }
-        else
-        {
-            assert(result == vk::Result::eSuccess);
-        }
-
-        m_FrameIndex = (m_FrameIndex + 1) % kMaxFramesInFlight;
-    }
-    */
-
+    // Draw Frame
     void Application::drawFrame()
     {
         auto fenceResult = m_Device.waitForFences(*m_InFlightFences[m_FrameIndex], vk::True, UINT64_MAX);
@@ -780,8 +730,7 @@ namespace Foxy
         uint32_t imageIndex;
         try
         {
-            auto [acquireResult, index] =
-                m_SwapChain.acquireNextImage(UINT64_MAX, *m_PresentCompleteSemaphores[m_FrameIndex], nullptr);
+            auto [acquireResult, index] =  m_SwapChain.acquireNextImage(UINT64_MAX, *m_PresentCompleteSemaphores[m_FrameIndex], nullptr);
             if (acquireResult == vk::Result::eErrorOutOfDateKHR)
             {
                 recreateSwapChain();
@@ -846,7 +795,6 @@ namespace Foxy
 
         m_FrameIndex = (m_FrameIndex + 1) % kMaxFramesInFlight;
     }
-    
 
     /******************************/
     // Swapchain Helper Functions //

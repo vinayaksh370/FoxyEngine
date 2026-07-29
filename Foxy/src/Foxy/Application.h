@@ -142,6 +142,7 @@ namespace Foxy
         // NVRHI STUFF
         void createNvrhiDevice();
         nvrhi::TextureHandle wrapSwapChainImageForNvrhi(vk::Image image);
+        nvrhi::Format vkFormatToNvrhiFormat(vk::Format format);
 
         /*==========================================*/
         // Swapchain Helper Func & Other Helper Func
@@ -158,9 +159,6 @@ namespace Foxy
         void transitionImageLayout(uint32_t imageIndex, vk::ImageLayout oldLayout, vk::ImageLayout newLayout,
                                    vk::AccessFlags2 srcAccessMask, vk::AccessFlags2 dstAccessMask,
                                    vk::PipelineStageFlags2 srcStageMask, vk::PipelineStageFlags2 dstStageMask);
-
-
-        
 
         // --------------------------------------------
         // Vertex Buffer

@@ -23,8 +23,6 @@ const std::vector<Vertex> kVertices = {
 
 namespace
 {
-    
-
     // Nvrhi Validation Layer -> display error msg
     class NvrhiMessageCallback : public nvrhi::IMessageCallback
     {
@@ -35,31 +33,6 @@ namespace
         }
     };
     NvrhiMessageCallback s_NvrhiMessageCallback;
-
-    /*VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,
-                                          const VkAllocationCallbacks* pAllocator,
-                                          VkDebugUtilsMessengerEXT* pDebugMessenger)
-    {
-        auto func =  (PFN_vkCreateDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
-        if (func != nullptr)
-        {
-            return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
-        }
-        else
-        {
-            return VK_ERROR_EXTENSION_NOT_PRESENT;
-        }
-    }
-
-    void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger,
-                                       const VkAllocationCallbacks* pAllocator)
-    {
-        auto func = (PFN_vkDestroyDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
-        if (func != nullptr)
-        {
-            func(instance, debugMessenger, pAllocator);
-        }
-    }*/
 } // anonymous namespace
 
 namespace Foxy
@@ -105,22 +78,17 @@ namespace Foxy
 
     void Application::initVulkan()
     {
-        initDispatchLoader();
-
         createInstance();
         setupDebugMessenger();
         createSurface();
         pickPhysicalDevice();
         createLogicalDevice();
 
-        VULKAN_HPP_DEFAULT_DISPATCHER.init(*m_Instance);
-
-        createNvrhiDevice(); // isolated experiment
+        createNvrhiDevice(); 
 
         createSwapChain();
         createImageViews();
         createGraphicsPipeline();
-
 
         createCommandPool();
         //createVertexBuffer();
@@ -150,8 +118,7 @@ namespace Foxy
     // CREATE INSTANCE:
     void Application::createInstance()
     {
-
-        
+        initDispatchLoader();
 
         if (kEnableValidationLayers && !checkValidationLayerSupport())
         {
@@ -202,6 +169,8 @@ namespace Foxy
         // place the Context we talked about earlier gets used directly.
         m_Instance = vk::raii::Instance(m_Context, createInfo);
 
+        // screen crashes without this || Important Dont Remove
+        VULKAN_HPP_DEFAULT_DISPATCHER.init(*m_Instance);
     }
 
 
@@ -417,6 +386,9 @@ namespace Foxy
                                               .ppEnabledExtensionNames = kRequiredDeviceExtensions.data()};
         m_Device = vk::raii::Device(m_ChosenGPU, deviceCreateInfo);
         m_GraphicsQueue = vk::raii::Queue(m_Device, static_cast<uint32_t>(m_GraphicsQueueFamily), 0);
+
+        // Remove if things dont work properly -> stuff works without it || if things start to break check here
+        VULKAN_HPP_DEFAULT_DISPATCHER.init(*m_Device);
     }
 
     // NVRHI DEVICE //
@@ -450,29 +422,58 @@ namespace Foxy
         }
     }
 
-    // SwapChain Setup //
+    //// SwapChain Setup //
+    //void Application::createSwapChain()
+    //{
+    //    vk::SurfaceCapabilitiesKHR surfaceCapabilities = m_ChosenGPU.getSurfaceCapabilitiesKHR(*m_Surface);
+
+    //    m_SwapChainExtent      = chooseSwapExtent(surfaceCapabilities);
+    //    uint32_t minImageCount = chooseSwapMinImageCount(surfaceCapabilities);
+
+    //    std::vector<vk::SurfaceFormatKHR> availableFormats = m_ChosenGPU.getSurfaceFormatsKHR(*m_Surface);
+    //    m_SwapChainSurfaceFormat                           = chooseSwapSurfaceFormat(availableFormats);
+
+    //    std::vector<vk::PresentModeKHR> availablePresentModes = m_ChosenGPU.getSurfacePresentModesKHR(*m_Surface);
+    //    vk::PresentModeKHR presentMode                        = chooseSwapPresentMode(availablePresentModes);
+
+    //    vk::SwapchainCreateInfoKHR swapChainCreateInfo{
+    //        .surface          = *m_Surface,
+    //        .minImageCount    = minImageCount,
+    //        .imageFormat      = m_SwapChainSurfaceFormat.format,
+    //        .imageColorSpace  = m_SwapChainSurfaceFormat.colorSpace,
+    //        .imageExtent      = m_SwapChainExtent,
+    //        .imageArrayLayers = 1,
+    //        .imageUsage       = vk::ImageUsageFlagBits::eColorAttachment,
+    //        .imageSharingMode = vk::SharingMode::eExclusive, // Foxy always has one combined graphics+present  queue family (enforced in isDeviceSuitable) —// no second queue to share images with.
+    //        .preTransform     = surfaceCapabilities.currentTransform,
+    //        .compositeAlpha   = vk::CompositeAlphaFlagBitsKHR::eOpaque,
+    //        .presentMode      = presentMode,
+    //        .clipped          = true};
+
+    //    m_SwapChain = vk::raii::SwapchainKHR(m_Device, swapChainCreateInfo);
+    //    m_SwapChainImages = m_SwapChain.getImages();
+
+    //}
+    // SwapChain Setup -> Create SwapChain + Nvrhi Wrapper for native SwapChain Images //
     void Application::createSwapChain()
     {
-        vk::SurfaceCapabilitiesKHR surfaceCapabilities = m_ChosenGPU.getSurfaceCapabilitiesKHR(*m_Surface);
-
-        m_SwapChainExtent      = chooseSwapExtent(surfaceCapabilities);
-        uint32_t minImageCount = chooseSwapMinImageCount(surfaceCapabilities);
-
-        std::vector<vk::SurfaceFormatKHR> availableFormats = m_ChosenGPU.getSurfaceFormatsKHR(*m_Surface);
-        m_SwapChainSurfaceFormat                           = chooseSwapSurfaceFormat(availableFormats);
-
+        vk::SurfaceCapabilitiesKHR surfaceCapabilities        = m_ChosenGPU.getSurfaceCapabilitiesKHR(*m_Surface);
+        m_SwapChainExtent                                     = chooseSwapExtent(surfaceCapabilities);
+        uint32_t minImageCount                                = chooseSwapMinImageCount(surfaceCapabilities);
+        std::vector<vk::SurfaceFormatKHR> availableFormats    = m_ChosenGPU.getSurfaceFormatsKHR(*m_Surface);
+        m_SwapChainSurfaceFormat                              = chooseSwapSurfaceFormat(availableFormats);
         std::vector<vk::PresentModeKHR> availablePresentModes = m_ChosenGPU.getSurfacePresentModesKHR(*m_Surface);
         vk::PresentModeKHR presentMode                        = chooseSwapPresentMode(availablePresentModes);
 
         vk::SwapchainCreateInfoKHR swapChainCreateInfo{
-            .surface          = *m_Surface,
+            .surface = *m_Surface,
             .minImageCount    = minImageCount,
             .imageFormat      = m_SwapChainSurfaceFormat.format,
             .imageColorSpace  = m_SwapChainSurfaceFormat.colorSpace,
             .imageExtent      = m_SwapChainExtent,
             .imageArrayLayers = 1,
             .imageUsage       = vk::ImageUsageFlagBits::eColorAttachment,
-            .imageSharingMode = vk::SharingMode::eExclusive, // Foxy always has one combined graphics+present  queue family (enforced in isDeviceSuitable) —// no second queue to share images with.
+            .imageSharingMode = vk::SharingMode::eExclusive, // Foxy always has one combined graphics+present  queue family (enforced in isDeviceSuitable) i.e. no second queue to share images with.
             .preTransform     = surfaceCapabilities.currentTransform,
             .compositeAlpha   = vk::CompositeAlphaFlagBitsKHR::eOpaque,
             .presentMode      = presentMode,
@@ -481,11 +482,24 @@ namespace Foxy
         m_SwapChain = vk::raii::SwapchainKHR(m_Device, swapChainCreateInfo);
         m_SwapChainImages = m_SwapChain.getImages();
 
+        m_NvrhiSwapChainImages.reserve(m_SwapChainImages.size());
+        for (const auto& image : m_SwapChainImages)
+        {
+            m_NvrhiSwapChainImages.push_back(wrapSwapChainImageForNvrhi(image));
+
+            std::cout << "NVRHI IMAGE CREATED : " << m_NvrhiSwapChainImages.size() << std::endl; //  Remove this later
+        }
     }
 
     // Destroy everything tied to the current swap chain, without touching the surface/device.
     void Application::cleanupSwapChain()
     {
+        std::cout << "SWAPCHAIN DESTRUCTION - nvrhi images: " << m_NvrhiSwapChainImages.size()
+                  << ", native image views: " << m_SwapChainImageViews.size() << std::endl; // Remove this later
+
+        m_NvrhiSwapChainImages.clear(); // NVRHI handles are refcounted - release our refs; NVRHI defers
+                                        // actual GPU-side cleanup internally until it's safe
+
         m_SwapChainImageViews.clear(); // raii - destructors run here, no manual vkDestroyImageView needed
         m_SwapChain = nullptr;         // raii - destructor runs here, no manual vkDestroySwapchainKHR needed
     }
@@ -505,27 +519,47 @@ namespace Foxy
         //vkDeviceWaitIdle(*m_Device); // don't touch resources the GPU might still be using
         m_Device.waitIdle();
 
+        std::cout << "SCREEN RESIZED :: SWAPCHAIN RESIZED" << std::endl; //  Remove this later
+
         cleanupSwapChain();
         createSwapChain();
         createImageViews();
     }
 
     // Nvrhi Wrapper for SwapChainImages
-    //nvrhi::TextureHandle Application::wrapSwapChainImageForNvrhi(vk::Image image)
-    //{
-    //    nvrhi::TextureDesc textureDesc;
-    //    textureDesc.width = m_SwapChainExtent.width;
-    //    textureDesc.height = m_SwapChainExtent.height;
-    //    textureDesc.format =
-    //        nvrhi::Format::BGRA8_UNORM; // hardcoded mapping - would need a real vk::Format -> nvrhi::Format table
-    //    textureDesc.isRenderTarget = true;
-    //    textureDesc.initialState = nvrhi::ResourceStates::Present;
-    //    textureDesc.keepInitialState = true;
-    //    textureDesc.debugName = "SwapChainImage";
+    nvrhi::TextureHandle Application::wrapSwapChainImageForNvrhi(vk::Image image)
+    {
+        nvrhi::TextureDesc textureDesc;
+        textureDesc.width  = m_SwapChainExtent.width;
+        textureDesc.height = m_SwapChainExtent.height;
+        textureDesc.format = vkFormatToNvrhiFormat(m_SwapChainSurfaceFormat.format);
+        textureDesc.isRenderTarget   = true;
+        textureDesc.initialState     = nvrhi::ResourceStates::Present;
+        textureDesc.keepInitialState = true;
+        textureDesc.debugName        = "SwapChainImage";
+        return m_NvrhiDevice->createHandleForNativeTexture(nvrhi::ObjectTypes::VK_Image,
+                                                           nvrhi::Object(static_cast<VkImage>(image)), textureDesc);
+    }
 
-    //    return m_NvrhiDevice->createHandleForNativeTexture(nvrhi::ObjectTypes::VK_Image,
-    //                                                       nvrhi::Object(static_cast<VkImage>(image)), textureDesc);
-    //}
+    // Vulkan format -> NVRHI format conversion, driven by whatever chooseSwapSurfaceFormat()
+    // actually picked - NOT hardcoded. Only covers formats chooseSwapSurfaceFormat() can
+    // realistically return; anything else throws rather than silently guessing wrong.
+    nvrhi::Format Application::vkFormatToNvrhiFormat(vk::Format format)
+    {
+        switch (format)
+        {
+        case vk::Format::eB8G8R8A8Unorm:
+            return nvrhi::Format::BGRA8_UNORM;
+        case vk::Format::eB8G8R8A8Srgb:
+            return nvrhi::Format::SBGRA8_UNORM;
+        case vk::Format::eR8G8B8A8Unorm:
+            return nvrhi::Format::RGBA8_UNORM;
+        case vk::Format::eR8G8B8A8Srgb:
+            return nvrhi::Format::SRGBA8_UNORM;
+        default:
+            throw std::runtime_error("vkFormatToNvrhiFormat: unhandled vk::Format - add a case rather than guessing.");
+        }
+    }
 
     // Create SwapChain Images Views //
     void Application::createImageViews()
@@ -544,8 +578,7 @@ namespace Foxy
         }
     }
 
-    
-
+    // Graphics PipeLine Setup
     void Application::createGraphicsPipeline()
     {
         // LOAD SHADER //

@@ -1,11 +1,9 @@
-// Foxy/src/Foxy/Application.cpp
+﻿// Foxy/src/Foxy/Application.cpp
 #include "Foxy/Application.h"
 #include "vk_types.h"
 
 // Define the Vulkan dynamic dispatcher - this needs to occur in exactly one cpp file in the program.
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
-
-
 
 // Hardcoded triangle vertex data, uploaded once to m_VertexBuffer in createVertexBuffer().
 // Layout must match Vertex::GetAttributeDescriptions() and basic_triangle.slang's VertexInput.
@@ -25,6 +23,8 @@ const std::vector<Vertex> kVertices = {
 
 namespace
 {
+    
+
     // Nvrhi Validation Layer -> display error msg
     class NvrhiMessageCallback : public nvrhi::IMessageCallback
     {
@@ -36,7 +36,7 @@ namespace
     };
     NvrhiMessageCallback s_NvrhiMessageCallback;
 
-    VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,
+    /*VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,
                                           const VkAllocationCallbacks* pAllocator,
                                           VkDebugUtilsMessengerEXT* pDebugMessenger)
     {
@@ -59,7 +59,7 @@ namespace
         {
             func(instance, debugMessenger, pAllocator);
         }
-    }
+    }*/
 } // anonymous namespace
 
 namespace Foxy
@@ -81,8 +81,8 @@ namespace Foxy
     {
         glfwInit();
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-        // glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);    // Simple Resizable or not
-        glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE); // Simple Resizable or not
+        //glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);    // Window Resizable or not
+        glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);      
 
         m_Window = glfwCreateWindow(m_AppSpec.Width, m_AppSpec.Height, m_AppSpec.Name.c_str(), nullptr, nullptr);
 
@@ -97,16 +97,25 @@ namespace Foxy
         app->m_FramebufferResized = true;
     }
 
+    void Application::initDispatchLoader() // Dynamic Dispatch Loader
+    {
+        auto vkGetInstanceProcAddr = m_dynamicLoader.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
+        VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
+    }
+
     void Application::initVulkan()
     {
+        initDispatchLoader();
+
         createInstance();
         setupDebugMessenger();
         createSurface();
         pickPhysicalDevice();
         createLogicalDevice();
 
-        // std::cout << "Hello Triangle" << std::endl;
-        //createNvrhiDevice(); // isolated experiment, see Section 5 of context file
+        VULKAN_HPP_DEFAULT_DISPATCHER.init(*m_Instance);
+
+        createNvrhiDevice(); // isolated experiment
 
         createSwapChain();
         createImageViews();
@@ -132,13 +141,18 @@ namespace Foxy
 
     void Application::cleanup()
     {
+        m_NvrhiDevice = nullptr;
+
         glfwDestroyWindow(m_Window);
         glfwTerminate();
     }
-
+    
     // CREATE INSTANCE:
     void Application::createInstance()
     {
+
+        
+
         if (kEnableValidationLayers && !checkValidationLayerSupport())
         {
             throw std::runtime_error("validation layers requested, but not available!");
@@ -187,7 +201,9 @@ namespace Foxy
         // m_Context is what actually bootstraps m_Instance here - this is the one
         // place the Context we talked about earlier gets used directly.
         m_Instance = vk::raii::Instance(m_Context, createInfo);
+
     }
+
 
     bool Application::checkValidationLayerSupport()
     {
@@ -212,6 +228,7 @@ namespace Foxy
         return true;
     }
 
+    // HelperFunc -> gets required glfw extensions
     std::vector<const char*> Application::getRequiredInstanceExtensions()
     {
         uint32_t glfwExtensionCount = 0;
@@ -227,6 +244,7 @@ namespace Foxy
         return extensions;
     }
 
+    // Setup DebugMessenger
     void Application::setupDebugMessenger()
     {
         if (!kEnableValidationLayers)
@@ -294,18 +312,17 @@ namespace Foxy
     {
         vk::PhysicalDeviceProperties deviceProperties = device.getProperties();
         bool supportsVulkan1_3 = deviceProperties.apiVersion >= vk::ApiVersion13;
-
         std::vector<vk::QueueFamilyProperties> queueFamilies = device.getQueueFamilyProperties();
-        bool supportsGraphics = false;
-        for (const auto& queueFamily : queueFamilies)
+        bool supportsGraphicsAndPresent = false;
+        for (uint32_t i = 0; i < queueFamilies.size(); i++)
         {
-            if (queueFamily.queueFlags & vk::QueueFlagBits::eGraphics)
+            if ((queueFamilies[i].queueFlags & vk::QueueFlagBits::eGraphics) &&
+                device.getSurfaceSupportKHR(i, m_Surface))
             {
-                supportsGraphics = true;
+                supportsGraphicsAndPresent = true;
                 break;
             }
         }
-
         std::vector<vk::ExtensionProperties> availableExtensions = device.enumerateDeviceExtensionProperties();
         bool supportsAllRequiredExtensions = true;
         for (const char* requiredExtension : kRequiredDeviceExtensions)
@@ -325,21 +342,27 @@ namespace Foxy
                 break;
             }
         }
-
-        auto features = device
-                .getFeatures2<vk::PhysicalDeviceFeatures2, vk::PhysicalDeviceVulkan11Features,
-                              vk::PhysicalDeviceVulkan13Features, vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>();
-
+        bool supportsSwapChain = false;
+        if (supportsAllRequiredExtensions)
+        {
+            std::vector<vk::SurfaceFormatKHR> formats = device.getSurfaceFormatsKHR(m_Surface);
+            std::vector<vk::PresentModeKHR> presentModes = device.getSurfacePresentModesKHR(m_Surface);
+            supportsSwapChain = !formats.empty() && !presentModes.empty();
+        }
+        auto features = device.getFeatures2<vk::PhysicalDeviceFeatures2, vk::PhysicalDeviceVulkan11Features,
+                                            vk::PhysicalDeviceVulkan12Features, vk::PhysicalDeviceVulkan13Features,
+                                            vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>();
         bool supportsRequiredFeatures =
             features.get<vk::PhysicalDeviceVulkan11Features>().shaderDrawParameters &&
+            features.get<vk::PhysicalDeviceVulkan12Features>().timelineSemaphore &&
             features.get<vk::PhysicalDeviceVulkan13Features>().dynamicRendering &&
             features.get<vk::PhysicalDeviceVulkan13Features>().synchronization2 &&
             features.get<vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>().extendedDynamicState;
-
-        return supportsVulkan1_3 && supportsGraphics && supportsAllRequiredExtensions && supportsRequiredFeatures;
+        return supportsVulkan1_3 && supportsGraphicsAndPresent && supportsAllRequiredExtensions && supportsSwapChain &&
+               supportsRequiredFeatures;
     }
 
-    /* Window Surface */ 
+    // Window Surface //
     void Application::createSurface()
     {
         VkSurfaceKHR surface;
@@ -350,12 +373,12 @@ namespace Foxy
         m_Surface = vk::raii::SurfaceKHR(m_Instance, surface);
     }
 
-    /* Create Logical Device */
+    // Create Logical Device //
     void Application::createLogicalDevice()
     {
         std::vector<vk::QueueFamilyProperties> queueFamilies = m_ChosenGPU.getQueueFamilyProperties();
-
-        for (uint32_t i = 0; i < queueFamilies.size(); i++)  // Go through All queuefamily || Pick first that supports both graphics and present
+        for (uint32_t i = 0; i < queueFamilies.size();
+             i++) // Go through All queuefamily || Pick first that supports both graphics and present
         {
             if ((queueFamilies[i].queueFlags & vk::QueueFlagBits::eGraphics) &&
                 m_ChosenGPU.getSurfaceSupportKHR(i, m_Surface))
@@ -364,39 +387,35 @@ namespace Foxy
                 break;
             }
         }
-
         if (m_GraphicsQueueFamily == -1)
         {
             throw std::runtime_error("No queue family found that supports both graphics and present!");
         }
-
-        // Re-request the same Vulkan 1.1 / 1.3 / extended-dynamic-state feature chain
+        // Re-request the same Vulkan 1.1 / 1.2 / 1.3 / extended-dynamic-state feature chain
         // used in isDeviceSuitable() - but this time SET the fields to true to actually
         // turn the features on, instead of just reading them to check support.
+        // vk::PhysicalDeviceVulkan12Features::timelineSemaphore added - required by NVRHI,
+        // which creates VK_SEMAPHORE_TYPE_TIMELINE semaphores internally for its own sync.
         vk::StructureChain<vk::PhysicalDeviceFeatures2, vk::PhysicalDeviceVulkan11Features,
-                           vk::PhysicalDeviceVulkan13Features, vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>
-            featureChain = {
-                {},                                                   
-                {.shaderDrawParameters = true},                       
-                {.synchronization2 = true, .dynamicRendering = true}, 
-                {.extendedDynamicState = true}
-            };
-
+                           vk::PhysicalDeviceVulkan12Features, vk::PhysicalDeviceVulkan13Features,
+                           vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>
+            featureChain = {{},
+                            {.shaderDrawParameters = true},
+                            {.timelineSemaphore = true},
+                            {.synchronization2 = true, .dynamicRendering = true},
+                            {.extendedDynamicState = true}};
         float queuePriority = 0.5f;
-        vk::DeviceQueueCreateInfo deviceQueueCreateInfo{.queueFamilyIndex = static_cast<uint32_t>(m_GraphicsQueueFamily),
+        vk::DeviceQueueCreateInfo deviceQueueCreateInfo{.queueFamilyIndex =
+                                                            static_cast<uint32_t>(m_GraphicsQueueFamily),
                                                         .queueCount = 1,
                                                         .pQueuePriorities = &queuePriority};
-
         vk::DeviceCreateInfo deviceCreateInfo{.pNext = &featureChain.get<vk::PhysicalDeviceFeatures2>(),
                                               .queueCreateInfoCount = 1,
                                               .pQueueCreateInfos = &deviceQueueCreateInfo,
-                                              .enabledExtensionCount = static_cast<uint32_t>(kRequiredDeviceExtensions.size()),
+                                              .enabledExtensionCount =
+                                                  static_cast<uint32_t>(kRequiredDeviceExtensions.size()),
                                               .ppEnabledExtensionNames = kRequiredDeviceExtensions.data()};
-
         m_Device = vk::raii::Device(m_ChosenGPU, deviceCreateInfo);
-
-        //VULKAN_HPP_DEFAULT_DISPATCHER.init(*m_Device);
-
         m_GraphicsQueue = vk::raii::Queue(m_Device, static_cast<uint32_t>(m_GraphicsQueueFamily), 0);
     }
 
@@ -419,6 +438,7 @@ namespace Foxy
             .numDeviceExtensions = kRequiredDeviceExtensions.size()
         };
         std::cout << "Hello Triangle" << std::endl;
+
         m_NvrhiDevice = nvrhi::vulkan::createDevice(deviceDesc);
         std::cout << "Hello Triangle" << std::endl;
         
@@ -452,7 +472,7 @@ namespace Foxy
             .imageExtent      = m_SwapChainExtent,
             .imageArrayLayers = 1,
             .imageUsage       = vk::ImageUsageFlagBits::eColorAttachment,
-            .imageSharingMode = vk::SharingMode::eExclusive, // Foxy always has one combined graphics+present  queue family (enforced in isDeviceSuitable) �// no second queue to share images with.
+            .imageSharingMode = vk::SharingMode::eExclusive, // Foxy always has one combined graphics+present  queue family (enforced in isDeviceSuitable) —// no second queue to share images with.
             .preTransform     = surfaceCapabilities.currentTransform,
             .compositeAlpha   = vk::CompositeAlphaFlagBitsKHR::eOpaque,
             .presentMode      = presentMode,
@@ -796,9 +816,9 @@ namespace Foxy
         m_FrameIndex = (m_FrameIndex + 1) % kMaxFramesInFlight;
     }
 
-    /******************************/
+    //============================//
     // Swapchain Helper Functions //
-    /******************************/
+    //============================//
 
     uint32_t Application::chooseSwapMinImageCount(const vk::SurfaceCapabilitiesKHR& capabilities)
     {

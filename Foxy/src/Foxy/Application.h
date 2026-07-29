@@ -5,14 +5,20 @@
 // Due to VULKAN_HPP_HANDLE_ERROR_OUT_OF_DATE_AS_SUCCESS being defined, eErrorOutOfDateKHR can be checked as a result
 // here and does not need to be caught by an exception. // This was the solution adviced by vulkann tutorial but it does not seem to work [Known Bug]
 //#define VULKAN_HPP_HANDLE_ERROR_OUT_OF_DATE_AS_SUCCESS 1
+
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
+
 #define VULKAN_HPP_NO_STRUCT_CONSTRUCTORS
 
+//#define VK_NO_PROTOTYPES 
+
+#include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_raii.hpp>
 
 
+
 #define GLFW_INCLUDE_NONE // Don't use OpenGL
-//#define GLFW_INCLUDE_VULKAN
+#define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
 #include <nvrhi/nvrhi.h>
@@ -56,7 +62,10 @@ namespace Foxy
 
         // Vulkan Stuff
 
-        vk::raii::Context                 m_Context;                          // Loads its own constructer
+        vk::detail::DynamicLoader         m_dynamicLoader;
+        void initDispatchLoader();
+
+        vk::raii::Context                 m_Context;                                        // Loads its own constructer
         vk::raii::Instance                m_Instance = nullptr;               // Connection to Vulkan API
         vk::raii::DebugUtilsMessengerEXT  m_DebugMessenger = nullptr;         // Error catcher 
         vk::raii::PhysicalDevice          m_ChosenGPU = nullptr;              // Selected PhysicalDevice or GPU

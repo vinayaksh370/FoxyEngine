@@ -10,10 +10,10 @@ int main()
     {
         ////
         Foxy::Log::Init();
-        FX_CORE_WARN("BehnKeLund Vulkan Initailized Ho gya");
+        FX_CORE_WARN("[VULKAN] Initialization Started");
 
-        int a = 5;
-        FX_INFO("Hello var={0}", a);
+        /*int a = 5;
+        FX_INFO("Hello var={0}", a);*/
         ////
 
         Foxy::ApplicationSpecification spec;

@@ -1,4 +1,6 @@
 // FoxyApp/src/main.cpp
+#include "Foxy.h"
+
 #include "Foxy/Application.h"
 #include "Foxy/Log.h"
 
@@ -10,7 +12,13 @@ int main()
     {
         ////
         Foxy::Log::Init();
-        FX_CORE_WARN("[VULKAN] Initialization Started");
+        FX_CORE_INFO("[VULKAN] Initialization Started");
+
+        FX_CORE_TRACE("TRACE");
+        FX_CORE_INFO("INFO");
+        FX_CORE_WARN("WARN");
+        FX_CORE_ERROR("ERROR");
+        FX_CORE_CRITICAL("CRITICAL");
 
         /*int a = 5;
         FX_INFO("Hello var={0}", a);*/

@@ -422,38 +422,6 @@ namespace Foxy
         }
     }
 
-    //// SwapChain Setup //
-    //void Application::createSwapChain()
-    //{
-    //    vk::SurfaceCapabilitiesKHR surfaceCapabilities = m_ChosenGPU.getSurfaceCapabilitiesKHR(*m_Surface);
-
-    //    m_SwapChainExtent      = chooseSwapExtent(surfaceCapabilities);
-    //    uint32_t minImageCount = chooseSwapMinImageCount(surfaceCapabilities);
-
-    //    std::vector<vk::SurfaceFormatKHR> availableFormats = m_ChosenGPU.getSurfaceFormatsKHR(*m_Surface);
-    //    m_SwapChainSurfaceFormat                           = chooseSwapSurfaceFormat(availableFormats);
-
-    //    std::vector<vk::PresentModeKHR> availablePresentModes = m_ChosenGPU.getSurfacePresentModesKHR(*m_Surface);
-    //    vk::PresentModeKHR presentMode                        = chooseSwapPresentMode(availablePresentModes);
-
-    //    vk::SwapchainCreateInfoKHR swapChainCreateInfo{
-    //        .surface          = *m_Surface,
-    //        .minImageCount    = minImageCount,
-    //        .imageFormat      = m_SwapChainSurfaceFormat.format,
-    //        .imageColorSpace  = m_SwapChainSurfaceFormat.colorSpace,
-    //        .imageExtent      = m_SwapChainExtent,
-    //        .imageArrayLayers = 1,
-    //        .imageUsage       = vk::ImageUsageFlagBits::eColorAttachment,
-    //        .imageSharingMode = vk::SharingMode::eExclusive, // Foxy always has one combined graphics+present  queue family (enforced in isDeviceSuitable) —// no second queue to share images with.
-    //        .preTransform     = surfaceCapabilities.currentTransform,
-    //        .compositeAlpha   = vk::CompositeAlphaFlagBitsKHR::eOpaque,
-    //        .presentMode      = presentMode,
-    //        .clipped          = true};
-
-    //    m_SwapChain = vk::raii::SwapchainKHR(m_Device, swapChainCreateInfo);
-    //    m_SwapChainImages = m_SwapChain.getImages();
-
-    //}
     // SwapChain Setup -> Create SwapChain + Nvrhi Wrapper for native SwapChain Images //
     void Application::createSwapChain()
     {
@@ -489,6 +457,24 @@ namespace Foxy
 
             std::cout << "NVRHI IMAGE CREATED : " << m_NvrhiSwapChainImages.size() << std::endl; //  Remove this later
         }
+
+        createNvrhiFramebuffers();
+    }
+
+    // One nvrhi::FramebufferHandle per swap chain image, built from the already-wrapped
+    // m_NvrhiSwapChainImages textures - one color attachment each, no depth/shading-rate yet.
+    void Application::createNvrhiFramebuffers()
+    {
+        assert(m_NvrhiFramebuffers.empty());                         // Crashes if framebuffers are not cleared already 
+        m_NvrhiFramebuffers.reserve(m_NvrhiSwapChainImages.size());  // No. of FBuffers == No. of SwapImages
+        for (const auto& swapChainTexture : m_NvrhiSwapChainImages)
+        {
+            nvrhi::FramebufferDesc framebufferDesc;                  // Settings for FB creation
+            framebufferDesc.addColorAttachment(swapChainTexture);
+            m_NvrhiFramebuffers.push_back(m_NvrhiDevice->createFramebuffer(framebufferDesc));
+
+            std::cout << "FrameBufferCount : " << m_NvrhiFramebuffers.size() << std::endl;  // Remove later
+        }
     }
 
     // Destroy everything tied to the current swap chain, without touching the surface/device.
@@ -497,11 +483,12 @@ namespace Foxy
         std::cout << "SWAPCHAIN DESTRUCTION - nvrhi images: " << m_NvrhiSwapChainImages.size()
                   << ", native image views: " << m_SwapChainImageViews.size() << std::endl; // Remove this later
 
+        m_NvrhiFramebuffers.clear();    // clear framebuffers before the textures they reference
         m_NvrhiSwapChainImages.clear(); // NVRHI handles are refcounted - release our refs; NVRHI defers
                                         // actual GPU-side cleanup internally until it's safe
 
-        m_SwapChainImageViews.clear(); // raii - destructors run here, no manual vkDestroyImageView needed
-        m_SwapChain = nullptr;         // raii - destructor runs here, no manual vkDestroySwapchainKHR needed
+        m_SwapChainImageViews.clear();  // raii - destructors run here, no manual vkDestroyImageView needed
+        m_SwapChain = nullptr;          // raii - destructor runs here, no manual vkDestroySwapchainKHR needed
     }
 
 
@@ -560,6 +547,8 @@ namespace Foxy
             throw std::runtime_error("vkFormatToNvrhiFormat: unhandled vk::Format - add a case rather than guessing.");
         }
     }
+
+    
 
     // Create SwapChain Images Views //
     void Application::createImageViews()
@@ -685,7 +674,9 @@ namespace Foxy
         return buffer;
     }
 
+    //===================//
     // CommandPool Setup //
+    //===================//
     void Application::createCommandPool()
     {
         vk::CommandPoolCreateInfo poolInfo{.flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
@@ -925,7 +916,8 @@ namespace Foxy
                                                              .baseMipLevel = 0,
                                                              .levelCount = 1,
                                                              .baseArrayLayer = 0,
-                                                             .layerCount = 1}};
+                                                             .layerCount = 1}
+        };
 
         vk::DependencyInfo dependencyInfo{.imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &barrier};
 

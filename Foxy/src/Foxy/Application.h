@@ -61,11 +61,10 @@ namespace Foxy
         static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
 
         // Vulkan Stuff
-
         vk::detail::DynamicLoader         m_dynamicLoader;
         void initDispatchLoader();
 
-        vk::raii::Context                 m_Context;                                        // Loads its own constructer
+        vk::raii::Context                 m_Context;                          // Loads its own constructer
         vk::raii::Instance                m_Instance = nullptr;               // Connection to Vulkan API
         vk::raii::DebugUtilsMessengerEXT  m_DebugMessenger = nullptr;         // Error catcher 
         vk::raii::PhysicalDevice          m_ChosenGPU = nullptr;              // Selected PhysicalDevice or GPU
@@ -73,10 +72,6 @@ namespace Foxy
         vk::raii::Device                  m_Device = nullptr;                 // LogicalDevice :: Our "connection" to the chosen GPU
         vk::raii::Queue                   m_GraphicsQueue = nullptr;          // Where we submit graphics commands
         int                               m_GraphicsQueueFamily = -1;         // unchanged - plain int, never was a Vulkan 
-
-        // Nvrhi Stuff
-        nvrhi::DeviceHandle               m_NvrhiDevice;
-        std::vector<nvrhi::TextureHandle> m_NvrhiSwapChainImages;
 
         vk::raii::SwapchainKHR            m_SwapChain = nullptr;
         std::vector<vk::Image>            m_SwapChainImages;
@@ -104,6 +99,17 @@ namespace Foxy
         const std::vector<char const*> kRequiredDeviceExtensions = {
             VK_KHR_SWAPCHAIN_EXTENSION_NAME                          // Needed to show images on screen
         };
+
+        // Nvrhi Stuff
+        nvrhi::DeviceHandle                   m_NvrhiDevice;
+        std::vector<nvrhi::TextureHandle>     m_NvrhiSwapChainImages;
+        std::vector<nvrhi::FramebufferHandle> m_NvrhiFramebuffers;
+
+        // NVRHI FUNC
+        void createNvrhiDevice();
+        nvrhi::TextureHandle wrapSwapChainImageForNvrhi(vk::Image image);
+        nvrhi::Format        vkFormatToNvrhiFormat(vk::Format format);
+        void createNvrhiFramebuffers();
 
         // Vulkan setup helpers
         void createInstance();                                         // Create the Vulkan connection
@@ -139,10 +145,7 @@ namespace Foxy
         void createSyncObjects();
         void drawFrame();
 
-        // NVRHI STUFF
-        void createNvrhiDevice();
-        nvrhi::TextureHandle wrapSwapChainImageForNvrhi(vk::Image image);
-        nvrhi::Format vkFormatToNvrhiFormat(vk::Format format);
+        
 
         /*==========================================*/
         // Swapchain Helper Func & Other Helper Func

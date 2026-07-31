@@ -1,36 +1,34 @@
 #pragma once
 
+// 1. Set the active level based on build configuration
+#ifdef NDEBUG
+// In Release mode, strip everything below INFO (Trace and Debug are removed)
+#define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_ERROR
+#else
+// In Debug mode, allow everything down to TRACE
+#define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
+#endif
+
 #include <spdlog/spdlog.h>
 #include <spdlog/fmt/ostr.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 
 #include "fxpch.h"
 
-// Core log macros
-//#define FXC_TRACE(...)    ::Foxy::Log::GetCoreLogger()->trace(__VA_ARGS__)
-#define FXC_INFO(...)     ::Foxy::Log::GetCoreLogger()->info(__VA_ARGS__)
-#define FXC_WARN(...)     ::Foxy::Log::GetCoreLogger()->warn(__VA_ARGS__)
-#define FXC_ERROR(...)    ::Foxy::Log::GetCoreLogger()->error(__VA_ARGS__)
-#define FXC_CRITICAL(...) ::Foxy::Log::GetCoreLogger()->critical(__VA_ARGS__)
-                                
-// Client log macros            Foxy
-#define FX_TRACE(...)         ::Foxy::Log::GetClientLogger()->trace(__VA_ARGS__)
-#define FX_INFO(...)          ::Foxy::Log::GetClientLogger()->info(__VA_ARGS__)
-#define FX_WARN(...)          ::Foxy::Log::GetClientLogger()->warn(__VA_ARGS__)  
-#define FX_ERROR(...)         ::Foxy::Log::GetClientLogger()->error(__VA_ARGS__)
-#define FX_CRITICAL(...)      ::Foxy::Log::GetClientLogger()->critical(__VA_ARGS__)
+// 2. Define Core Logger Macros
+// These use SPDLOG_LOGGER_... which strip calls at compile-time if active level is too low
+#define FXC_TRACE(...)    SPDLOG_LOGGER_TRACE(::Foxy::Log::GetCoreLogger(), __VA_ARGS__)
+#define FXC_INFO(...)     SPDLOG_LOGGER_INFO(::Foxy::Log::GetCoreLogger(), __VA_ARGS__)
+#define FXC_WARN(...)     SPDLOG_LOGGER_WARN(::Foxy::Log::GetCoreLogger(), __VA_ARGS__)
+#define FXC_ERROR(...)    SPDLOG_LOGGER_ERROR(::Foxy::Log::GetCoreLogger(), __VA_ARGS__)
+#define FXC_CRITICAL(...) SPDLOG_LOGGER_CRITICAL(::Foxy::Log::GetCoreLogger(), __VA_ARGS__)
 
-#ifdef NDEBUG
-// Release Mode
-#define FXC_TRACE(...) ::Foxy::Log::GetClientLogger()->trace(__VA_ARGS__)
-#define FXC_INFO(...) ::Foxy::Log::GetClientLogger()->info(__VA_ARGS__)
-#define FXC_WARN(...) ::Foxy::Log::GetClientLogger()->warn(__VA_ARGS__)
-#else
- // Debug Mode
-#define FXC_TRACE(...)
-#define FXC_INFO(...)
-#define FXC_WARN(...)
-#endif
+// 3. Define Client Logger Macros
+#define FX_TRACE(...)     SPDLOG_LOGGER_TRACE(::Foxy::Log::GetClientLogger(), __VA_ARGS__)
+#define FX_INFO(...)      SPDLOG_LOGGER_INFO(::Foxy::Log::GetClientLogger(), __VA_ARGS__)
+#define FX_WARN(...)      SPDLOG_LOGGER_WARN(::Foxy::Log::GetClientLogger(), __VA_ARGS__)
+#define FX_ERROR(...)     SPDLOG_LOGGER_ERROR(::Foxy::Log::GetClientLogger(), __VA_ARGS__)
+#define FX_CRITICAL(...)  SPDLOG_LOGGER_CRITICAL(::Foxy::Log::GetClientLogger(), __VA_ARGS__)
 
 namespace Foxy
 {

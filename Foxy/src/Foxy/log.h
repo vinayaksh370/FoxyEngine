@@ -4,7 +4,33 @@
 #include <spdlog/fmt/ostr.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 
-#include "vk_types.h"
+#include "fxpch.h"
+
+// Core log macros
+//#define FXC_TRACE(...)    ::Foxy::Log::GetCoreLogger()->trace(__VA_ARGS__)
+#define FXC_INFO(...)     ::Foxy::Log::GetCoreLogger()->info(__VA_ARGS__)
+#define FXC_WARN(...)     ::Foxy::Log::GetCoreLogger()->warn(__VA_ARGS__)
+#define FXC_ERROR(...)    ::Foxy::Log::GetCoreLogger()->error(__VA_ARGS__)
+#define FXC_CRITICAL(...) ::Foxy::Log::GetCoreLogger()->critical(__VA_ARGS__)
+                                
+// Client log macros            Foxy
+#define FX_TRACE(...)         ::Foxy::Log::GetClientLogger()->trace(__VA_ARGS__)
+#define FX_INFO(...)          ::Foxy::Log::GetClientLogger()->info(__VA_ARGS__)
+#define FX_WARN(...)          ::Foxy::Log::GetClientLogger()->warn(__VA_ARGS__)  
+#define FX_ERROR(...)         ::Foxy::Log::GetClientLogger()->error(__VA_ARGS__)
+#define FX_CRITICAL(...)      ::Foxy::Log::GetClientLogger()->critical(__VA_ARGS__)
+
+#ifdef NDEBUG
+// Release Mode
+#define FXC_TRACE(...) ::Foxy::Log::GetClientLogger()->trace(__VA_ARGS__)
+#define FXC_INFO(...) ::Foxy::Log::GetClientLogger()->info(__VA_ARGS__)
+#define FXC_WARN(...) ::Foxy::Log::GetClientLogger()->warn(__VA_ARGS__)
+#else
+ // Debug Mode
+#define FXC_TRACE(...)
+#define FXC_INFO(...)
+#define FXC_WARN(...)
+#endif
 
 namespace Foxy
 {
@@ -12,7 +38,8 @@ namespace Foxy
     class Log
     {
     public:
-        static void Init();
+        static void Init_Logger();
+        static void ShutDown_Logger();
 
         static std::shared_ptr<spdlog::logger>& GetCoreLogger()
         {
@@ -47,17 +74,3 @@ namespace Foxy
 //{
 //    return os << glm::to_string(quaternion);
 //}
-
-// Core log macros
-#define FX_CORE_TRACE(...)    ::Foxy::Log::GetCoreLogger()->trace(__VA_ARGS__)
-#define FX_CORE_INFO(...)     ::Foxy::Log::GetCoreLogger()->info(__VA_ARGS__)
-#define FX_CORE_WARN(...)     ::Foxy::Log::GetCoreLogger()->warn(__VA_ARGS__)
-#define FX_CORE_ERROR(...)    ::Foxy::Log::GetCoreLogger()->error(__VA_ARGS__)
-#define FX_CORE_CRITICAL(...) ::Foxy::Log::GetCoreLogger()->critical(__VA_ARGS__)
-                                
-// Client log macros            Foxy
-#define FX_TRACE(...)         ::Foxy::Log::GetClientLogger()->trace(__VA_ARGS__)
-#define FX_INFO(...)          ::Foxy::Log::GetClientLogger()->info(__VA_ARGS__)
-#define FX_WARN(...)          ::Foxy::Log::GetClientLogger()->warn(__VA_ARGS__)
-#define FX_ERROR(...)         ::Foxy::Log::GetClientLogger()->error(__VA_ARGS__)
-#define FX_CRITICAL(...)      ::Foxy::Log::GetClientLogger()->critical(__VA_ARGS__)

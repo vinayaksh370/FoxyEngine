@@ -4,6 +4,7 @@ file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS
 )
 
 add_library(Foxy STATIC ${SOURCES})
+target_precompile_headers(Foxy PRIVATE src/fxpch.h)
 
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES ${SOURCES})
 

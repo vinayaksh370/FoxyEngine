@@ -2,3 +2,4 @@
 
 #include "Foxy/Application.h"
 #include "Foxy/log.h"
+#include "fxpch.h"

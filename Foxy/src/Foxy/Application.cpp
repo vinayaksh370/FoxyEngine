@@ -1,6 +1,7 @@
 ﻿// Foxy/src/Foxy/Application.cpp
 #include "Foxy/Application.h"
-#include "vk_types.h"
+#include "fxpch.h"
+#include <algorithm>
 
 // Define the Vulkan dynamic dispatcher - this needs to occur in exactly one cpp file in the program.
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
@@ -101,7 +102,7 @@ namespace Foxy
         while (!glfwWindowShouldClose(m_Window))
         {
             glfwPollEvents();
-            drawFrame();
+            drawFrame();                                     
         }
         //vkDeviceWaitIdle(*m_Device); // wait for the GPU to finish before we start destroying resources
         m_Device.waitIdle();
@@ -548,8 +549,6 @@ namespace Foxy
         }
     }
 
-    
-
     // Create SwapChain Images Views //
     void Application::createImageViews()
     {
@@ -647,6 +646,51 @@ namespace Foxy
         // KNOWN DEBT (unchanged): "shaders/basic_triangle.spv" is a hardcoded, app-specific
         // asset path living inside the Core/engine layer (Foxy::Application). This is exactly
         // the problem the upcoming Layer system is meant to solve.
+    }
+
+    // --------------------------------------------
+    // NVRHI Graphics Pipeline - parallel track. The raw vk::raii pipeline above (createGraphicsPipeline())
+    // is still the one actually rendering; this coexists until the NVRHI path is proven end-to-end,
+    // then the raw path gets deleted outright (not left dormant) per earlier discussion.
+    // --------------------------------------------
+    void Application::createNvrhiGraphicsPipeline()
+    {
+        std::vector<char> shaderCode = readFile("shaders/basic_triangle.spv"); // same known-debt hardcoded
+                                                                               // path as the raw pipeline -
+                                                                               // both still read the same file
+
+        nvrhi::ShaderDesc vertexShaderDesc =
+            nvrhi::ShaderDesc().setShaderType(nvrhi::ShaderType::Vertex).setEntryName("vertMain");
+        m_NvrhiVertexShader = m_NvrhiDevice->createShader(vertexShaderDesc, shaderCode.data(), shaderCode.size());
+
+        nvrhi::ShaderDesc pixelShaderDesc =
+            nvrhi::ShaderDesc().setShaderType(nvrhi::ShaderType::Pixel).setEntryName("fragMain");
+        m_NvrhiPixelShader = m_NvrhiDevice->createShader(pixelShaderDesc, shaderCode.data(), shaderCode.size());
+
+        // NOTE: no input layout - vertex buffer wiring is deliberately deferred, same known debt
+        // as the raw pipeline. The shader still reads hardcoded positions/colors via SV_VertexID,
+        // so there's no real vertex attribute layout to describe yet.
+
+        auto framebufferInfo = m_NvrhiFramebuffers[0]->getFramebufferInfo(); // any framebuffer works -
+                                                                             // all 3 share the same info
+
+        nvrhi::RasterState rasterState;
+        rasterState.setCullMode(nvrhi::RasterCullMode::Back);
+        rasterState.setFrontCounterClockwise(false); // raw pipeline uses eClockwise as its front face
+
+        nvrhi::DepthStencilState depthStencilState;
+        depthStencilState.disableDepthTest();
+        depthStencilState.disableStencil();
+
+        auto pipelineDesc =
+            nvrhi::GraphicsPipelineDesc()
+                .setVertexShader(m_NvrhiVertexShader)
+                .setPixelShader(m_NvrhiPixelShader)
+                .setPrimType(nvrhi::PrimitiveType::TriangleList)
+                .setRenderState(
+                    nvrhi::RenderState().setRasterState(rasterState).setDepthStencilState(depthStencilState));
+
+        m_NvrhiGraphicsPipeline = m_NvrhiDevice->createGraphicsPipeline(pipelineDesc, framebufferInfo);
     }
 
     // Shader Module - Wraps SpirV byteCode in ShaderModule
@@ -846,7 +890,7 @@ namespace Foxy
 
     uint32_t Application::chooseSwapMinImageCount(const vk::SurfaceCapabilitiesKHR& capabilities)
     {
-        uint32_t minImageCount = std::max(3u, capabilities.minImageCount);
+        uint32_t minImageCount = (std::max)(3u, capabilities.minImageCount);
         if (capabilities.maxImageCount > 0 && capabilities.maxImageCount < minImageCount)
         {
             minImageCount = capabilities.maxImageCount;
@@ -880,7 +924,7 @@ namespace Foxy
 
     vk::Extent2D Application::chooseSwapExtent(const vk::SurfaceCapabilitiesKHR& capabilities)
     {
-        if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max())
+        if (capabilities.currentExtent.width != (std::numeric_limits<uint32_t>::max)())
         {
             return capabilities.currentExtent;
         }

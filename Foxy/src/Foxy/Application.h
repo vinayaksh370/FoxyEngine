@@ -25,7 +25,7 @@
 #include <nvrhi/vulkan.h>
 #include <nvrhi/validation.h>
 
-#include "vk_types.h"
+#include "fxpch.h"
 
 namespace Foxy
 {
@@ -105,11 +105,16 @@ namespace Foxy
         std::vector<nvrhi::TextureHandle>     m_NvrhiSwapChainImages;
         std::vector<nvrhi::FramebufferHandle> m_NvrhiFramebuffers;
 
+        nvrhi::ShaderHandle m_NvrhiVertexShader;
+        nvrhi::ShaderHandle m_NvrhiPixelShader;
+        nvrhi::GraphicsPipelineHandle m_NvrhiGraphicsPipeline;
+
         // NVRHI FUNC
         void createNvrhiDevice();
         nvrhi::TextureHandle wrapSwapChainImageForNvrhi(vk::Image image);
         nvrhi::Format        vkFormatToNvrhiFormat(vk::Format format);
         void createNvrhiFramebuffers();
+        void createNvrhiGraphicsPipeline();
 
         // Vulkan setup helpers
         void createInstance();                                         // Create the Vulkan connection

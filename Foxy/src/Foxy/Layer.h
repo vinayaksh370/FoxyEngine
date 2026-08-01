@@ -24,28 +24,30 @@
 #include "Application.h"
 #include "fxpch.h"
 
+// Foxy/src/Foxy/Layer.h
 namespace Foxy
 {
-    // Minimal render context handed to a Layer each frame - deliberately raw/raii
-    // Vulkan for now, matching where the rest of the engine currently is.
-    // (This is the seam that would eventually become nvrhi::IFramebuffer* instead,
-    // if/when NVRHI actually takes over rendering - see Section 5 NVRHI notes.)
-    struct FrameContext
-    {
-        VkCommandBuffer commandBuffer;
-        //vk::CommandBuffer commandBuffer;
-        vk::Extent2D extent;
-        vk::raii::ImageView& targetImageView; // the swap chain image view for this frame
-    };
-
     class Layer
     {
     public:
+        Layer(const std::string& name = "Layer") : m_DebugName(name) {}
         virtual ~Layer() = default;
 
-        virtual void OnAttach() {}                  // called once, after Vulkan/device/swapchain exist
-        virtual void OnDetach() {}                  // called once, before device teardown
-        virtual void OnUpdate(float ts) {}          // CPU-side per-frame logic (camera, input, etc.)
-        virtual void OnRender(FrameContext& ctx) {} // GPU-side: bind pipeline, draw
+        virtual void OnAttach() {}            // Called when layer is pushed to the stack
+        virtual void OnDetach() {}            // Called when layer is removed
+
+        virtual void OnUpdate(float ts) {}    // Logic/Physics updates
+        virtual void OnUIRender() {}          // Dear ImGui rendering [7]
+        virtual void OnRender() {}            // Main GAPI (NVRHI) rendering [8]
+
+        //virtual void OnEvent(Event& event) {} // Input/OS events [8, 9]
+
+        const std::string& GetName() const
+        {
+            return m_DebugName;
+        }
+
+    protected:
+        std::string m_DebugName;
     };
 } // namespace Foxy

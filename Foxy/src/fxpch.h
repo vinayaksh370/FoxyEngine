@@ -34,6 +34,7 @@
 // Safe to precompile: unlike vulkan_raii.hpp, this header has no dependency on
 // project-defined config macros set immediately before inclusion.
 #include <vulkan/vulkan.h>
+//#include <vulkan/vulkan.hpp>
 #include <vulkan/vk_enum_string_helper.h> // string_VkResult() etc., used by VK_CHECK
 
 // ---- NVRHI ----

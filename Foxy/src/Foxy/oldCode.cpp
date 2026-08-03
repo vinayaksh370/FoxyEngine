@@ -523,3 +523,82 @@ void Application::drawFrame()
     m_FrameIndex = (m_FrameIndex + 1) % kMaxFramesInFlight;
 }
 */
+
+/*
+static void drawFrame()
+{
+    auto fenceResult = m_Device.waitForFences(*m_InFlightFences[m_FrameIndex], vk::True, UINT64_MAX);
+    if (fenceResult != vk::Result::eSuccess)
+    {
+        throw std::runtime_error("failed to wait for fence!");
+    }
+
+    uint32_t imageIndex;
+    try
+    {
+        auto [acquireResult, index] =
+            m_SwapChain.acquireNextImage(UINT64_MAX, *m_PresentCompleteSemaphores[m_FrameIndex], nullptr);
+        if (acquireResult == vk::Result::eErrorOutOfDateKHR)
+        {
+            recreateSwapChain();
+            return;
+        }
+        if (acquireResult != vk::Result::eSuccess && acquireResult != vk::Result::eSuboptimalKHR)
+        {
+            throw std::runtime_error("failed to acquire swap chain image!");
+        }
+        imageIndex = index;
+    }
+    catch (const vk::OutOfDateKHRError&)
+    {
+        recreateSwapChain();
+        return;
+    }
+
+    m_Device.resetFences(*m_InFlightFences[m_FrameIndex]);
+
+    m_CommandBuffers[m_FrameIndex].reset();
+    recordCommandBuffer(imageIndex);
+
+    vk::PipelineStageFlags waitDestinationStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput);
+    const vk::SubmitInfo submitInfo{.waitSemaphoreCount = 1,
+                                    .pWaitSemaphores = &*m_PresentCompleteSemaphores[m_FrameIndex],
+                                    .pWaitDstStageMask = &waitDestinationStageMask,
+                                    .commandBufferCount = 1,
+                                    .pCommandBuffers = &*m_CommandBuffers[m_FrameIndex],
+                                    .signalSemaphoreCount = 1,
+                                    .pSignalSemaphores = &*m_RenderFinishedSemaphores[imageIndex]};
+    m_GraphicsQueue.submit(submitInfo, *m_InFlightFences[m_FrameIndex]);
+
+    const vk::PresentInfoKHR presentInfoKHR{.waitSemaphoreCount = 1,
+                                            .pWaitSemaphores = &*m_RenderFinishedSemaphores[imageIndex],
+                                            .swapchainCount = 1,
+                                            .pSwapchains = &*m_SwapChain,
+                                            .pImageIndices = &imageIndex};
+
+    vk::Result result;
+    try
+    {
+        result = m_GraphicsQueue.presentKHR(presentInfoKHR);
+    }
+    catch (const vk::OutOfDateKHRError&)
+    {
+        m_FramebufferResized = false;
+        recreateSwapChain();
+        m_FrameIndex = (m_FrameIndex + 1) % kMaxFramesInFlight;
+        return;
+    }
+
+    if ((result == vk::Result::eSuboptimalKHR) || (result == vk::Result::eErrorOutOfDateKHR) || m_FramebufferResized)
+    {
+        m_FramebufferResized = false;
+        recreateSwapChain();
+    }
+    else
+    {
+        assert(result == vk::Result::eSuccess);
+    }
+
+    m_FrameIndex = (m_FrameIndex + 1) % kMaxFramesInFlight;
+}
+*/

@@ -1,23 +1,3 @@
-//// Foxy/src/Foxy/Layer.h
-//#pragma once
-//
-//namespace Foxy
-//{
-//
-//    class Layer
-//    {
-//    public:
-//        virtual ~Layer() = default;
-//
-//        virtual void OnAttach() {}
-//        virtual void OnDetach() {}
-//
-//        virtual void OnUpdate(float ts) {}
-//        virtual void OnUIRender() {}
-//    };
-//
-//} // namespace Walnut
-
 // Foxy/src/Foxy/Layer.h
 #pragma once
 
@@ -37,10 +17,12 @@ namespace Foxy
         virtual void OnDetach() {}            // Called when layer is removed
 
         virtual void OnUpdate(float ts) {}    // Logic/Physics updates
-        virtual void OnUIRender() {}          // Dear ImGui rendering [7]
-        virtual void OnRender() {}            // Main GAPI (NVRHI) rendering [8]
+        //virtual void OnRender() {}            // Main GAPI (NVRHI) rendering [8]
 
-        //virtual void OnEvent(Event& event) {} // Input/OS events [8, 9]
+        virtual void OnRender(nvrhi::IFramebuffer* framebuffer) {}
+
+        //virtual void OnUIRender() {}          // Dear ImGui rendering
+        //virtual void OnEvent(Event& event) {} // Input/OS events 
 
         const std::string& GetName() const
         {

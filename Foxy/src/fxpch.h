@@ -30,6 +30,10 @@
 #include <glm/mat4x4.hpp>
 #include <glm/vec4.hpp>
 
+//// Base GLFW
+//#define GLFW_INCLUDE_NONE
+//#include <GLFW/glfw3.h>
+
 // ---- Raw Vulkan C API ----
 // Safe to precompile: unlike vulkan_raii.hpp, this header has no dependency on
 // project-defined config macros set immediately before inclusion.
